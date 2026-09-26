@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-sort-database"
+version = "0.1.0"
+description = "PostgreSQL persistence models and migrations for Mail Sort"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.20,<1.21",
+  "psycopg[binary]>=3.2,<4.0",
+  "sqlalchemy>=2.0,<2.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_sort_database"]

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-decision"
+version = "0.1.0"
+description = "Classifies Mail Sort messages and publishes their routes"
+requires-python = ">=3.12"
+dependencies = [
+  "mail-sort-contracts==0.1.0",
+  "mail-sort-database==0.1.0",
+  "langchain>=1.0,<2.0",
+  "langchain-core>=1.0,<2.0",
+  "langchain-google-genai>=4.4,<5.0",
+  "pydantic>=2.10,<3.0",
+]
+
+[project.scripts]
+mail-decision = "mail_decision.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_decision"]

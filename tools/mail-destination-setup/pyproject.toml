@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-destination-setup"
+version = "0.1.0"
+description = "Creates EWS destination folders and registers them in Mail Sort"
+requires-python = ">=3.12"
+dependencies = [
+  "exchangelib>=5,<6",
+  "mail-sort-database==0.1.0",
+]
+
+[project.scripts]
+mail-destination-setup = "mail_destination_setup.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_destination_setup"]

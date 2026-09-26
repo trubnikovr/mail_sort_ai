@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-sort-contracts"
+version = "0.1.0"
+description = "Shared contracts for Mail Sort services"
+requires-python = ">=3.12"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_sort_contracts"]

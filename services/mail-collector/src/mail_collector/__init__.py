@@ -1,0 +1,1 @@
+"""Mailbox discovery service."""

@@ -1,0 +1,33 @@
+sequenceDiagram
+    title Mail Sort: durable classification and mailbox action queues
+
+    actor Mailbox
+    participant Collector as mail-collector
+    participant DB as PostgreSQL
+    participant Decision as mail-decision
+    participant AI as AI model
+    participant Router as mail-router
+
+    Mailbox->>Collector: Read new messages
+    Collector->>DB: Save email_records
+    Collector->>DB: Enqueue classify_email
+
+    Decision->>DB: Claim classify_email (FOR UPDATE SKIP LOCKED)
+    Decision->>DB: Read snapshot and active destinations
+    Decision->>AI: Sender, subject, body, permitted destinations
+    AI-->>Decision: destination_id and confidence
+
+    rect rgb(240, 246, 255)
+        Note over Decision,DB: One database transaction
+        Decision->>DB: Audit classification result
+        Decision->>DB: Enqueue route_email
+        Decision->>DB: Complete classify_email
+    end
+
+    Router->>DB: Claim route_email
+    Router->>Mailbox: IMAP MOVE or EWS MoveItem
+    alt Provider confirms move
+        Router->>DB: Complete route_email
+    else Provider unavailable or fails
+        Router->>DB: Retry route_email with delay
+    end
