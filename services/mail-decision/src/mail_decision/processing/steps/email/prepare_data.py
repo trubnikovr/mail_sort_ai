@@ -1,6 +1,6 @@
 from mail_decision.processing.context import EmailContent, ProcessingContext
 
-from .interface import ProcessingStep
+from ..interface import ProcessingStep
 
 
 class PrepareData(ProcessingStep):
@@ -14,6 +14,7 @@ class PrepareData(ProcessingStep):
         if email is None:
             raise RuntimeError("Email must be loaded before preparing data")
         prepared = EmailContent(
+            headers=email.headers,
             sender=email.sender.strip(),
             subject=email.subject.strip(),
             body=email.body.strip()[: self._max_body_characters],

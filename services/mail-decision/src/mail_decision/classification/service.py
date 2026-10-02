@@ -7,7 +7,13 @@ from .prompt_builder import ClassificationPromptBuilder
 
 
 class ClassificationResponse(BaseModel):
-    action: Literal["classified", "need_body"]
+    action: Literal["classified", "need_body", "review"] = Field(
+        description=(
+            "classified: choose a supplied destination; review: uncertain, unknown, "
+            "or correspondence requiring human handling; "
+            "need_body: subject-only classification needs the message body"
+        )
+    )
     category: str | None = Field(default=None)
     destination_id: str | None = Field(default=None)
     confidence: float | None = Field(default=None, ge=0, le=1)
@@ -19,6 +25,8 @@ class ClassificationResponse(BaseModel):
             not self.category or not self.destination_id or self.confidence is None
         ):
             raise ValueError("A classified response requires category, destination_id, and confidence")
+        if self.action == "review" and self.destination_id is not None:
+            raise ValueError(f"A {self.action} response must not specify a destination_id")
         return self
 
 
@@ -48,6 +56,8 @@ class ClassificationService:
         body: str,
         destinations: dict[str, str],
     ) -> ClassificationResponse:
+        # print(self._prompts.for_body_classification(sender, subject, body, destinations))
+        # exit()
         response = self._agent.ask(
             messages=self._prompts.for_body_classification(sender, subject, body, destinations),
             response_schema=ClassificationResponse,

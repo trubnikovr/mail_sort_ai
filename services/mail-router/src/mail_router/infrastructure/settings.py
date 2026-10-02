@@ -14,6 +14,7 @@ class Settings:
     worker_id: str
     mailbox_provider: MailProvider
     mailbox_source: str
+    mailbox_account_id: str = ""
     imap_host: str | None = None
     imap_port: int = 993
     imap_username: str | None = None
@@ -30,6 +31,7 @@ class Settings:
             raise ValueError("MAILBOX_PROVIDER must be either 'imap' or 'ews'")
         settings = cls(
             database_url=cls._required("DATABASE_URL"),
+            mailbox_account_id=cls._required("MAILBOX_ACCOUNT_ID"),
             poll_interval_seconds=cls._positive_int("ROUTER_POLL_INTERVAL_SECONDS", 10),
             retry_delay_seconds=cls._positive_int("RETRY_DELAY_SECONDS", 60),
             stale_job_timeout_seconds=cls._positive_int("STALE_JOB_TIMEOUT_SECONDS", 300),

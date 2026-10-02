@@ -5,6 +5,7 @@ from time import sleep
 from mail_collector.bootstrap import build_synchronization_service
 from mail_collector.mailboxes.models import MailboxAccount
 from mail_collector.infrastructure.settings import Settings
+from mail_collector.logging_config import configure_logging
 from mail_collector.synchronization.service import MailboxSynchronizationService
 
 
@@ -25,7 +26,7 @@ def main() -> None:
     parser.add_argument("--once", action="store_true", help="Synchronize once and exit")
     arguments = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
     settings = Settings.from_environment()
     service = build_synchronization_service(settings)
 

@@ -1,12 +1,17 @@
 # Mail Sort — working agreement
 
+## Tests
+
+- Do not add or modify tests unless the user explicitly requests it. This preference avoids spending the user's token budget on unsolicited test work.
+
 ## Structure
 
 - Use screaming architecture: top-level names express a business capability, not a technical pattern. For example, `mail-collector` says what the service does; a name such as `ingest` does not.
 - `services/mail-collector`, `services/mail-decision`, and `services/mail-router` are independent deployable services.
 - A service must not import code from another service.
-- `packages/contracts` is the only shared Python package. It contains transport and domain contracts only: types, validation schemas, and constants. It contains no database, provider, AI, or framework implementation.
+- `packages/contracts` is the shared transport/domain contract package. It contains transport and domain contracts only: types, validation schemas, and constants. It contains no database, provider, AI, or framework implementation.
 - `packages/database` is the shared persistence package. It contains SQLAlchemy models, session helpers, and the single Alembic migration history. It contains no service use cases.
+- `packages/repositories` contains the shared, manually maintained destination tuple and its repository only. Decision and Router retain their own adapters and interfaces; other repositories remain service-local.
 - PostgreSQL is the source of truth for jobs and audit data. `LISTEN` / `NOTIFY` wakes workers up but must never be treated as durable delivery.
 
 ## Queue rules

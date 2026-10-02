@@ -25,9 +25,21 @@ class EwsMailboxSource(MailboxSource):
             access_type=DELEGATE,
         )
         folder = self._folder(mailbox, account.mailbox)
+        if cursor is None:
+            # Baseline at the newest existing message; never import the old mailbox backlog.
+            latest = folder.all().order_by("-datetime_received")[:1]
+            latest_item = next(iter(latest), None)
+            latest_received = getattr(latest_item, "datetime_received", None) if latest_item else None
+            if latest_received is None:
+                latest_received = datetime.now(UTC)
+            if latest_received.tzinfo is None:
+                latest_received = latest_received.replace(tzinfo=UTC)
+            return SyncPage(messages=(), next_cursor=latest_received.isoformat())
         items = folder.all().order_by("datetime_received")
-        if cursor:
-            items = items.filter(datetime_received__gt=datetime.fromisoformat(cursor))
+        items = items.filter(
+            datetime_received__gt=datetime.fromisoformat(cursor),
+            is_read=False,
+        )
         messages = tuple(self._message(item) for item in items[:50])
         next_cursor = messages[-1].received_at.isoformat() if messages and messages[-1].received_at else (cursor or "")
         return SyncPage(messages=messages, next_cursor=next_cursor)
@@ -50,7 +62,11 @@ class EwsMailboxSource(MailboxSource):
         sender = getattr(getattr(item, "sender", None), "email_address", "") or ""
         return DiscoveredMessage(
             provider_message_id=getattr(item, "id"),
-            headers={"from": sender, "subject": getattr(item, "subject", "") or ""},
+            headers={
+                "from": sender,
+                "subject": getattr(item, "subject", "") or "",
+                "item_class": getattr(item, "item_class", "") or "",
+            },
             body=str(getattr(item, "text_body", "") or "").strip(),
             received_at=received,
         )

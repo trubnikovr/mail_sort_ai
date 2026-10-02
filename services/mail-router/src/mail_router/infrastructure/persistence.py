@@ -1,3 +1,4 @@
+from mail_sort_repositories import DestinationRepository as SharedDestinationRepository
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -7,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from mail_sort_contracts import MailProvider, RouteEmailJob
-from mail_sort_database.models import Destination, Job
+from mail_sort_database.models import Job
 from mail_sort_database.session import session_scope
 
 from mail_router.routing.registry import DestinationMailboxLookup
@@ -131,17 +132,10 @@ class RouteJobStore(MailboxActionClaimer):
 
 
 class DestinationRepository(DestinationMailboxLookup):
-    def __init__(self, sessions: sessionmaker[Session]) -> None:
-        self._sessions = sessions
+    """Adapt shared destination records to a mailbox path for routing."""
+
+    def __init__(self, account_id: str) -> None:
+        self._repository = SharedDestinationRepository(account_id)
 
     def mailbox_for(self, account_id: str, destination_id: str) -> str:
-        statement = select(Destination.mailbox).where(
-            Destination.account_id == account_id,
-            Destination.id == destination_id,
-            Destination.is_active.is_(True),
-        )
-        with session_scope(self._sessions) as session:
-            mailbox = session.scalar(statement)
-        if mailbox is None:
-            raise LookupError(f"Active destination {destination_id!r} was not found")
-        return mailbox
+        return self._repository.get_active(account_id, destination_id).mailbox

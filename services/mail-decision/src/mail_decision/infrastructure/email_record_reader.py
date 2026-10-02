@@ -31,4 +31,5 @@ class EmailRecordReader(EmailReader):
             sender=record.headers.get("from", ""),
             subject=record.subject,
             body=record.body,
+            headers=record.headers,
         )

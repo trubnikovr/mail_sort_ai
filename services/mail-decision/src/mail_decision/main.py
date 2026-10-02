@@ -1,15 +1,14 @@
 import argparse
-import logging
-
 from .bootstrap import build_worker
 from .infrastructure.settings import Settings
+from .logging_config import configure_logging
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Process at most one queued classification")
     arguments = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
     settings = Settings.from_environment()
     worker = build_worker(settings)
     if arguments.once:

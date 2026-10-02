@@ -15,7 +15,7 @@ class SettingsTest(unittest.TestCase):
             "ai_api_key": "test-key",
             "ai_confidence_threshold": 0.9,
             "subject_confidence_threshold": 0.95,
-            "ai_max_requests_per_day": 200,
+            "ai_daily_request_limit": 200,
             "ai_max_body_characters": 1000,
             "poll_interval_seconds": 10,
             "retry_delay_seconds": 60,
@@ -33,22 +33,38 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "AI_MODEL"):
             self._settings(ai_model="  ")
 
-    def test_requires_gemini_key_from_environment(self) -> None:
-        environment = dict(os.environ)
-        environment.pop("GOOGLE_API_KEY", None)
-        environment.pop("GEMINI_API_KEY", None)
-        environment.update(
-            {
+    def setUp(self) -> None:
+        loader = patch.object(Settings, "_load_local_env")
+        loader.start()
+        self.addCleanup(loader.stop)
+
+    def test_requires_generic_key_from_environment(self) -> None:
+        for provider in ("gemini", "openai"):
+            with self.subTest(provider=provider), patch.dict(os.environ, {
                 "DATABASE_URL": "postgresql://postgres@localhost/mail_sort",
                 "MAILBOX_ACCOUNT_ID": "personal-gmail",
-                "IMAP_HOST": "imap.gmail.com",
-                "IMAP_USERNAME": "mail@example.com",
-                "IMAP_APP_PASSWORD": "test-password",
-            }
-        )
-        with patch.dict(os.environ, environment, clear=True):
-            with self.assertRaisesRegex(ValueError, "GOOGLE_API_KEY"):
-                Settings.from_environment()
+                "AI_PROVIDER": provider,
+                "AI_MODEL": "test-model",
+                "GOOGLE_API_KEY": "legacy-key",
+                "GEMINI_API_KEY": "legacy-key",
+                "OPENAI_API_KEY": "legacy-key",
+            }, clear=True):
+                with self.assertRaisesRegex(ValueError, "AI_AGENT_API_KEY"):
+                    Settings.from_environment()
+
+    def test_accepts_openai_configuration(self) -> None:
+        with patch.dict(os.environ, {
+            "DATABASE_URL": "postgresql://postgres@localhost/mail_sort",
+            "MAILBOX_ACCOUNT_ID": "personal-gmail",
+            "AI_PROVIDER": "OPENAI",
+            "AI_MODEL": "gpt-test-model",
+            "AI_AGENT_API_KEY": "test-key",
+        }, clear=True):
+            settings = Settings.from_environment()
+        self.assertEqual(settings.ai_provider, "openai")
+        self.assertEqual(settings.ai_model, "gpt-test-model")
+        self.assertEqual(settings.ai_api_key, "test-key")
+        self.assertNotIn("test-key", repr(settings))
 
     def test_accepts_valid_gemini_configuration(self) -> None:
         with patch.dict(
@@ -56,7 +72,7 @@ class SettingsTest(unittest.TestCase):
             {
                 "AI_PROVIDER": "GEMINI",
                 "AI_MODEL": "gemini-3.5-flash-lite",
-                "GOOGLE_API_KEY": "test-key",
+                "AI_AGENT_API_KEY": "test-key",
                 "DATABASE_URL": "postgresql://postgres@localhost/mail_sort",
                 "MAILBOX_ACCOUNT_ID": "personal-gmail",
                 "IMAP_HOST": "imap.gmail.com",

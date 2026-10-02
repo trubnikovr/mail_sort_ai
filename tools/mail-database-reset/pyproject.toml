@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-database-reset"
+version = "0.1.0"
+description = "Confirmed database cleanup CLI for Mail Sort development"
+requires-python = ">=3.12"
+dependencies = ["mail-sort-database"]
+
+[project.scripts]
+mail-database-reset = "mail_database_reset.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_database_reset"]

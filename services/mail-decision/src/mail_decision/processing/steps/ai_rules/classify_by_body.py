@@ -2,12 +2,13 @@ import logging
 
 from mail_decision.classification.service import ClassificationService
 from mail_decision.processing.context import (
+    DailyRequestLimitReached,
     REVIEW_DESTINATION_ID,
     ProcessingContext,
     ProcessingOutcome,
 )
 
-from .interface import ProcessingStep
+from ..interface import ProcessingStep
 
 
 logger = logging.getLogger(__name__)
@@ -23,9 +24,6 @@ class ClassifyByBody(ProcessingStep):
         self._confidence_threshold = confidence_threshold
 
     def execute(self, context: ProcessingContext) -> None:
-        if context.outcome is not None:
-            logger.info("body classification skipped: job_id=%s subject decision already available", context.job.id)
-            return
         if context.prepared_email is None:
             raise RuntimeError("Email must be prepared before body classification")
         email = context.prepared_email
@@ -33,12 +31,40 @@ class ClassifyByBody(ProcessingStep):
             "AI body request started: job_id=%s body_characters=%s destinations=%s",
             context.job.id, len(email.body), len(context.destinations),
         )
-        response = self._classifier.classify_body(
-            email.sender,
-            email.subject,
-            email.body,
-            context.destinations,
-        )
+        try:
+            response = self._classifier.classify_body(
+                email.sender,
+                email.subject,
+                email.body,
+                context.destinations,
+            )
+        except DailyRequestLimitReached:
+            raise
+        except Exception as error:
+            logger.error(
+                "AI classification failed; routing to review: job_id=%s error_type=%s",
+                context.job.id,
+                type(error).__name__,
+            )
+            if REVIEW_DESTINATION_ID not in context.destinations:
+                raise RuntimeError("Manual review destination is not configured") from None
+            context.outcome = ProcessingOutcome(
+                status="review",
+                destination_id=REVIEW_DESTINATION_ID,
+                source="ai_body",
+                confidence=None,
+                reason=f"AI classification failed ({type(error).__name__})",
+            )
+            return
+        if response.action == "review":
+            if REVIEW_DESTINATION_ID not in context.destinations:
+                raise RuntimeError("Manual review destination is not configured")
+            context.outcome = ProcessingOutcome(
+                status="review",
+                destination_id=REVIEW_DESTINATION_ID,
+                source="ai_body", confidence=response.confidence, reason=response.reason,
+            )
+            return
         if response.action != "classified":
             raise ValueError("AI requested the email body after the body was already provided")
         if response.destination_id not in context.destinations:
@@ -51,12 +77,10 @@ class ClassifyByBody(ProcessingStep):
         )
         destination_id = REVIEW_DESTINATION_ID if needs_review else response.destination_id
         if needs_review and destination_id not in context.destinations:
-            raise ValueError(
-                f"Active review destination {REVIEW_DESTINATION_ID!r} is not configured"
-            )
+            raise RuntimeError("Manual review destination is not configured")
         context.outcome = ProcessingOutcome(
             status="review" if needs_review else "completed",
-            destination_id=destination_id or "",
+            destination_id=destination_id,
             source="ai_body",
             confidence=confidence,
             reason=response.reason,

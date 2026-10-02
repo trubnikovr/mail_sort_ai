@@ -7,7 +7,6 @@ import imaplib
 from .email_body import extract_body
 from .models import DiscoveredMessage, MailboxAccount, SyncPage
 from .port import MailboxSource
-from .recent_mail_policy import RecentMailPolicy
 
 
 class ImapMailboxSource(MailboxSource):
@@ -16,11 +15,9 @@ class ImapMailboxSource(MailboxSource):
     def __init__(
         self,
         connection_factory: Callable[[MailboxAccount], imaplib.IMAP4],
-        recent_mail: RecentMailPolicy | None = None,
     ) -> None:
         # The factory owns TLS, authentication, and secret retrieval.
         self._connection_factory = connection_factory
-        self._recent_mail = recent_mail or RecentMailPolicy()
 
     def collect(self, account: MailboxAccount, cursor: str | None) -> SyncPage:
         last_uid = int(cursor or "0")
@@ -29,10 +26,17 @@ class ImapMailboxSource(MailboxSource):
             status, _ = session.select(account.mailbox, readonly=True)
             if status != "OK":
                 raise RuntimeError(f"Could not select IMAP mailbox {account.mailbox!r}")
+            if cursor is None:
+                # Establish a high-water mark without importing the mailbox backlog.
+                status, data = session.uid("SEARCH", None, "ALL")
+                if status != "OK":
+                    raise RuntimeError("IMAP UID SEARCH for initial cursor failed")
+                uids = [int(value) for value in data[0].split()] if data and data[0] else []
+                return SyncPage(messages=(), next_cursor=str(max(uids, default=0)))
             status, data = session.uid(
                 "SEARCH",
                 None,
-                f"UID {last_uid + 1}:* SINCE {self._recent_mail.imap_since_criterion()}",
+                f"UNSEEN UID {last_uid + 1}:*",
             )
             if status != "OK":
                 raise RuntimeError("IMAP UID SEARCH failed")
@@ -58,6 +62,17 @@ class ImapMailboxSource(MailboxSource):
             "date": str(message.get("Date", "")),
             "message_id": str(message.get("Message-ID", "")),
         }
+        # Only the top-level report counts; ignore attached/forwarded reports.
+        if (message.get_content_type() == "multipart/report"
+                and message.get_param("report-type") == "delivery-status"):
+            actions = []
+            for part in message.iter_parts():
+                if part.get_content_type() == "message/delivery-status":
+                    for block in part.get_payload():
+                        action = block.get("Action")
+                        if action:
+                            actions.append(str(action).strip().lower())
+            headers["delivery_status_actions"] = ",".join(actions)
         return DiscoveredMessage(
             provider_message_id=str(uid),
             headers=headers,

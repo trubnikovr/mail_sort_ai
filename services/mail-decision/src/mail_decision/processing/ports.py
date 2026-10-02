@@ -23,5 +23,5 @@ class ClassificationResultStore(ABC):
 
 class AiRequestQuota(ABC):
     @abstractmethod
-    def reserve(self, provider: str) -> bool:
+    def acquire(self, provider: str) -> bool:
         raise NotImplementedError

@@ -1,3 +1,4 @@
+from mail_sort_repositories import DestinationRepository as SharedDestinationRepository
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID, uuid4
@@ -5,7 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from mail_sort_database.models import AiDailyUsage, AuditLog, Destination, Job
+from mail_sort_database.models import AiDailyUsage, AuditLog, Job
 from mail_sort_database.session import session_scope
 from sqlalchemy.dialects.postgresql import insert
 
@@ -35,6 +36,7 @@ class JobStore(ClassificationResultStore, JobClaimer):
             account_id=job.account_id,
             provider_message_id=job.provider_message_id,
             email_record_id=str(job.email_record_id),
+            attempt=job.attempts,
         )
 
     def _claim_next(self, job_type: str) -> Job | None:
@@ -103,7 +105,7 @@ class JobStore(ClassificationResultStore, JobClaimer):
                     },
                 )
             )
-            if outcome.status in {"completed", "review"}:
+            if outcome.status in {"completed", "review"} and outcome.destination_id is not None:
                 route = RouteEmailJob(
                     account_id=classification_job.account_id,
                     provider=cast(MailProvider, classification_job.provider),
@@ -141,6 +143,18 @@ class JobStore(ClassificationResultStore, JobClaimer):
             classification_job.locked_at = None
             classification_job.locked_by = None
             classification_job.completed_at = now
+
+    def defer(self, job_id: str, error: Exception, delay_seconds: int) -> None:
+        with session_scope(self._sessions) as session:
+            job = session.get(Job, UUID(job_id), with_for_update=True)
+            if job is None or job.status != "processing" or job.locked_by != self._worker_id:
+                raise LookupError(f"Owned processing job {job_id} was not found")
+            job.status = "pending"
+            job.attempts = max(0, job.attempts - 1)
+            job.last_error = str(error)[:4000]
+            job.locked_at = None
+            job.locked_by = None
+            job.retry_at = datetime.now(UTC) + timedelta(seconds=delay_seconds)
 
     def retry(self, job_id: str, error: Exception, retry_delay_seconds: int) -> None:
         now = datetime.now(UTC)
@@ -187,47 +201,29 @@ class JobStore(ClassificationResultStore, JobClaimer):
 
 
 class DestinationRepository(DestinationRepositoryPort):
-    def __init__(self, sessions: sessionmaker[Session]) -> None:
-        self._sessions = sessions
+    """Adapt shared destination records to the classifier's descriptions."""
+
+    def __init__(self, account_id: str) -> None:
+        self._repository = SharedDestinationRepository(account_id)
 
     def active_for_account(self, account_id: str) -> dict[str, str]:
-        statement = select(
-            Destination.id,
-            Destination.name,
-            Destination.description,
-        ).where(
-            Destination.account_id == account_id,
-            Destination.is_active.is_(True),
-        )
-        with session_scope(self._sessions) as session:
-            return {
-                destination_id: (
-                    f"{name} — {description}" if description else name
-                )
-                for destination_id, name, description in session.execute(statement)
-            }
-
-    def mailbox_for(self, account_id: str, destination_id: str) -> str:
-        statement = select(Destination.mailbox).where(
-            Destination.account_id == account_id,
-            Destination.id == destination_id,
-            Destination.is_active.is_(True),
-        )
-        with session_scope(self._sessions) as session:
-            mailbox = session.scalar(statement)
-        if mailbox is None:
-            raise LookupError(f"Active destination {destination_id!r} was not found")
-        return mailbox
+        return {
+            destination.id: (
+                f"{destination.name} — {destination.instruction}"
+                if destination.instruction else destination.name
+            )
+            for destination in self._repository.for_ai(account_id)
+        }
 
 
 class DailyAiRequestQuota(AiRequestQuota):
-    """Reserves one API request without ever exceeding the configured daily cap."""
+    """Atomically acquires one request permit within the configured daily cap."""
 
     def __init__(self, sessions: sessionmaker[Session], max_requests_per_day: int) -> None:
         self._sessions = sessions
         self._max_requests_per_day = max_requests_per_day
 
-    def reserve(self, provider: str) -> bool:
+    def acquire(self, provider: str) -> bool:
         statement = (
             insert(AiDailyUsage)
             .values(provider=provider, usage_date=datetime.now(UTC).date(), request_count=1)

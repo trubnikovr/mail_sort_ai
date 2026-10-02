@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-job-inspect"
+version = "0.1.0"
+description = "Print concise database history for a Mail Sort job"
+requires-python = ">=3.12"
+dependencies = ["mail-sort-database==0.1.0"]
+
+[project.scripts]
+mail-job-inspect = "mail_job_inspect.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_job_inspect"]

@@ -1,9 +1,9 @@
 import logging
 
 from mail_decision.classification.service import ClassificationService
-from mail_decision.processing.context import ProcessingContext, ProcessingOutcome
+from mail_decision.processing.context import REVIEW_DESTINATION_ID, ProcessingContext, ProcessingOutcome
 
-from .interface import ProcessingStep
+from ..interface import ProcessingStep
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,17 @@ class ClassifyBySubject(ProcessingStep):
         if response.action == "need_body":
             logger.info("AI subject result: job_id=%s action=need_body; continuing with body", context.job.id)
             return
+        if response.action == "review":
+            if REVIEW_DESTINATION_ID not in context.destinations:
+                raise RuntimeError("Manual review destination is not configured")
+            context.outcome = ProcessingOutcome(
+                status="review",
+                destination_id=REVIEW_DESTINATION_ID,
+                source="ai_subject",
+                confidence=response.confidence,
+                reason=response.reason,
+            )
+            return
         if response.destination_id not in context.destinations:
             raise ValueError("AI returned a destination outside the allowed list")
         confidence = response.confidence if response.confidence is not None else 0
@@ -40,6 +51,15 @@ class ClassifyBySubject(ProcessingStep):
             "body_classification" if confidence < self._confidence_threshold else "save_result",
         )
         if confidence < self._confidence_threshold:
+            if REVIEW_DESTINATION_ID not in context.destinations:
+                raise RuntimeError("Manual review destination is not configured")
+            context.outcome = ProcessingOutcome(
+                status="review",
+                destination_id=REVIEW_DESTINATION_ID,
+                source="ai_subject",
+                confidence=confidence,
+                reason=response.reason,
+            )
             return
         context.outcome = ProcessingOutcome(
             status="completed",

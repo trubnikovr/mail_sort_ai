@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from math import ceil
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -14,6 +15,7 @@ class ClaimedEmailJob:
     account_id: str
     provider_message_id: str
     email_record_id: str
+    attempt: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,13 +23,14 @@ class EmailContent:
     sender: str
     subject: str
     body: str
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class ProcessingOutcome:
     status: Literal["completed", "review"]
-    destination_id: str
-    source: Literal["ai_subject", "ai_body"]
+    destination_id: str | None
+    source: Literal["ai_subject", "ai_body", "ndr_rule", "subject_filter"]
     confidence: float | None
     reason: str
 
@@ -49,4 +52,4 @@ class DailyRequestLimitReached(RuntimeError):
         next_day = (now + timedelta(days=1)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        return int((next_day - now).total_seconds())
+        return ceil((next_day - now).total_seconds())

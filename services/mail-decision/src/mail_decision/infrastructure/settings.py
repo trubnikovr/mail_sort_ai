@@ -3,7 +3,7 @@ from os import environ, getenv
 from pathlib import Path
 
 
-SUPPORTED_AI_PROVIDERS = frozenset({"gemini"})
+SUPPORTED_AI_PROVIDERS = frozenset({"gemini", "openai"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +15,7 @@ class Settings:
     ai_api_key: str = field(repr=False)
     ai_confidence_threshold: float
     subject_confidence_threshold: float
-    ai_max_requests_per_day: int
+    ai_daily_request_limit: int
     ai_max_body_characters: int
     poll_interval_seconds: int
     retry_delay_seconds: int
@@ -34,17 +34,17 @@ class Settings:
     @classmethod
     def from_environment(cls) -> "Settings":
         cls._load_local_env()
-        provider = getenv("AI_PROVIDER", "gemini").strip().lower()
-        model = getenv("AI_MODEL", "gemini-3.5-flash-lite").strip()
+        provider = getenv("AI_PROVIDER", "openai").strip().lower()
+        model = cls._required("AI_MODEL")
         settings = cls(
             database_url=cls._required("DATABASE_URL"),
             mailbox_account_id=cls._required("MAILBOX_ACCOUNT_ID"),
             ai_provider=provider,
             ai_model=model,
-            ai_api_key=cls._provider_api_key(provider),
+            ai_api_key=cls._required("AI_AGENT_API_KEY"),
             ai_confidence_threshold=cls._confidence_threshold(),
             subject_confidence_threshold=cls._probability("SUBJECT_CONFIDENCE_THRESHOLD", 0.95),
-            ai_max_requests_per_day=cls._positive_int("AI_MAX_REQUESTS_PER_DAY", 200),
+            ai_daily_request_limit=cls._positive_int("AI_DAILY_REQUEST_LIMIT", 200),
             ai_max_body_characters=cls._positive_int("AI_MAX_BODY_CHARS", 1000),
             poll_interval_seconds=cls._positive_int(
                 "DECISION_POLL_INTERVAL_SECONDS",
@@ -57,15 +57,6 @@ class Settings:
         if not settings.worker_id:
             raise ValueError("WORKER_ID must not be empty")
         return settings
-
-    @staticmethod
-    def _provider_api_key(provider: str) -> str:
-        if provider == "gemini":
-            value = (getenv("GOOGLE_API_KEY") or getenv("GEMINI_API_KEY") or "").strip()
-            if value:
-                return value
-            raise ValueError("GOOGLE_API_KEY (or GEMINI_API_KEY) is required for AI_PROVIDER=gemini")
-        return ""
 
     @staticmethod
     def _required(name: str) -> str:

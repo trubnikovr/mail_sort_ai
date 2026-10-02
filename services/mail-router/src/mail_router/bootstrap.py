@@ -9,7 +9,7 @@ from .infrastructure.settings import Settings
 
 def build_worker(settings: Settings) -> MailboxActionWorker:
     sessions = create_session_factory(settings.database_url)
-    destinations = DestinationRepository(sessions)
+    destinations = DestinationRepository(settings.mailbox_account_id)
     actions = [(settings.mailbox_provider, MailboxActionFactory(settings, destinations).resolve())]
     return MailboxActionWorker(
         actions=MailboxActionRegistry(actions),

@@ -32,10 +32,13 @@ class EwsMoveToFolderAction(MailboxAction):
         logger.info("resolving destination in database: job_id=%s destination_id=%s", job.id, job.destination_id)
         target = self._destinations.mailbox_for(job.account_id, job.destination_id)
         logger.info("EWS connecting and resolving target folder: job_id=%s target=%r", job.id, target)
+        destination_parts = [part.strip() for part in target.strip("/").split("/") if part.strip()]
         destination = account.root
-        for part in target.strip("/").split("/"):
-            if part:
-                destination = destination / part
+        if destination_parts and destination_parts[0].casefold() == "inbox":
+            destination = account.inbox
+            destination_parts = destination_parts[1:]
+        for part in destination_parts:
+            destination = destination / part
         logger.info("EWS target folder found: job_id=%s target=%r", job.id, target)
         logger.info("EWS resolving source folder: job_id=%s source=%r", job.id, self._source_mailbox)
         if self._source_mailbox.strip().lower() == "inbox":

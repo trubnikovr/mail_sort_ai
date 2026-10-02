@@ -1,7 +1,7 @@
 from mail_decision.processing.context import ProcessingContext
 from mail_decision.processing.ports import EmailReader
 
-from .interface import ProcessingStep
+from ..interface import ProcessingStep
 
 
 class GetEmail(ProcessingStep):

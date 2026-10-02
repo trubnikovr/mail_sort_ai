@@ -5,12 +5,12 @@ from mail_sort_contracts import ClassificationDecision
 from mail_decision.classification.service import ClassificationResponse
 from mail_decision.processing.context import ClaimedEmailJob, EmailContent
 from mail_decision.processing.email_classification_process import EmailClassificationProcess
-from mail_decision.processing.steps.classify_by_body import ClassifyByBody
-from mail_decision.processing.steps.classify_by_subject import ClassifyBySubject
-from mail_decision.processing.steps.get_email import GetEmail
-from mail_decision.processing.steps.mark_as_done import MarkAsDone
-from mail_decision.processing.steps.prepare_data import PrepareData
-from mail_decision.processing.steps.validate_ai_request import ValidateAiRequest
+from mail_decision.processing.steps.ai_rules.classify_by_body import ClassifyByBody
+from mail_decision.processing.steps.disabled.classify_by_subject import ClassifyBySubject
+from mail_decision.processing.steps.email.get_email import GetEmail
+from mail_decision.processing.steps.email.prepare_data import PrepareData
+from mail_decision.processing.steps.limits.validate_ai_request import ValidateAiRequest
+from mail_decision.processing.steps.limits.acquire_ai_request_permit import AcquireAiRequestPermit
 
 
 class _Reader:
@@ -65,7 +65,7 @@ class _Classifier:
 
 
 class _Quota:
-    def reserve(self, _: str) -> bool:
+    def acquire(self, _: str) -> bool:
         return True
 
 
@@ -85,12 +85,14 @@ class ProcessTest(unittest.TestCase):
                 steps=[
                     GetEmail(_Reader()),
                     PrepareData(3),
-                    ValidateAiRequest(_Destinations(), _Quota(), "gemini"),
+                    ValidateAiRequest(_Destinations()),
+                    AcquireAiRequestPermit(_Quota(), "gemini"),
                     ClassifyBySubject(classifier, 0.95),
-                    ValidateAiRequest(_Destinations(), _Quota(), "gemini"),
+                    ValidateAiRequest(_Destinations()),
+                    AcquireAiRequestPermit(_Quota(), "gemini"),
                     ClassifyByBody(classifier, 0.9),
-                    MarkAsDone(results),
-                ]
+                ],
+                results=results,
             ), classifier, results,
         )
 
@@ -114,3 +116,58 @@ class ProcessTest(unittest.TestCase):
         self.assertEqual(outcome.destination_id, "needs-review")
         self.assertEqual(classifier.email.body, "abc")
         self.assertEqual(results.finalized, [("job-1", outcome)])
+
+
+class ProcessControlTest(unittest.TestCase):
+    def test_stops_after_outcome_and_finalizes_once(self):
+        from unittest.mock import Mock
+        from mail_decision.processing.context import ProcessingOutcome
+
+        outcome = ProcessingOutcome("completed", "ndr", "ndr_rule", None, "NDR")
+        first, later, results = Mock(), Mock(), Mock()
+        first.execute.side_effect = lambda context: setattr(context, "outcome", outcome)
+        job = ClaimedEmailJob("job", "account", "message", "record")
+        process = EmailClassificationProcess([first, later], results)
+        self.assertEqual(process.execute(job), outcome)
+        later.execute.assert_not_called()
+        results.finalize.assert_called_once_with(job, outcome)
+
+    def test_step_errors_propagate_without_finalization(self):
+        from unittest.mock import Mock
+        from mail_decision.processing.context import DailyRequestLimitReached
+
+        for error in (DailyRequestLimitReached("quota"), ValueError("invalid")):
+            with self.subTest(error=type(error).__name__):
+                step, later, results = Mock(), Mock(), Mock()
+                step.execute.side_effect = error
+                process = EmailClassificationProcess([step, later], results)
+                with self.assertRaises(type(error)) as raised:
+                    process.execute(ClaimedEmailJob("job", "account", "message", "record"))
+                self.assertIs(raised.exception, error)
+                later.execute.assert_not_called()
+                results.finalize.assert_not_called()
+
+    def test_missing_outcome_does_not_finalize(self):
+        from unittest.mock import Mock
+
+        results = Mock()
+        with self.assertRaisesRegex(RuntimeError, "without an outcome"):
+            EmailClassificationProcess([], results).execute(
+                ClaimedEmailJob("job", "account", "message", "record")
+            )
+        results.finalize.assert_not_called()
+
+    def test_finalization_error_propagates(self):
+        from unittest.mock import Mock
+        from mail_decision.processing.context import ProcessingOutcome
+
+        step, results = Mock(), Mock()
+        step.execute.side_effect = lambda context: setattr(
+            context, "outcome", ProcessingOutcome("completed", "ndr", "ndr_rule", None, "NDR")
+        )
+        results.finalize.side_effect = RuntimeError("database unavailable")
+        with self.assertRaisesRegex(RuntimeError, "database unavailable"):
+            EmailClassificationProcess([step], results).execute(
+                ClaimedEmailJob("job", "account", "message", "record")
+            )
+        results.finalize.assert_called_once()

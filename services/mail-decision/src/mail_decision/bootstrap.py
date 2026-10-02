@@ -3,6 +3,7 @@ from mail_sort_database.session import create_session_factory
 from .classification.prompt_builder import ClassificationPromptBuilder
 from .classification.service import ClassificationService
 from .infrastructure.ai_agent import AiAgent
+from .infrastructure.diagnostics import DatabaseDiagnosticStore
 from .infrastructure.email_record_reader import EmailRecordReader
 from .infrastructure.persistence import (
     DailyAiRequestQuota,
@@ -11,13 +12,13 @@ from .infrastructure.persistence import (
 )
 from .infrastructure.settings import Settings
 from .processing.email_classification_process import EmailClassificationProcess
-from .processing.context import REVIEW_DESTINATION_ID
-from .processing.steps.classify_by_body import ClassifyByBody
-from .processing.steps.classify_by_subject import ClassifyBySubject
-from .processing.steps.get_email import GetEmail
-from .processing.steps.mark_as_done import MarkAsDone
-from .processing.steps.prepare_data import PrepareData
-from .processing.steps.validate_ai_request import ValidateAiRequest
+from .processing.steps.ai_rules.classify_by_body import ClassifyByBody
+from .processing.steps.email.get_email import GetEmail
+from .processing.steps.rules.detect_ndr import DetectNdr
+from .processing.steps.rules.detect_configured_filters import DetectConfiguredFilters
+from .processing.steps.email.prepare_data import PrepareData
+from .processing.steps.limits.validate_ai_request import ValidateAiRequest
+from .processing.steps.limits.acquire_ai_request_permit import AcquireAiRequestPermit
 from .processing.worker import JobWorker
 
 
@@ -31,43 +32,35 @@ def build_ai_agent(settings: Settings) -> AiAgent:
 
 def build_worker(settings: Settings) -> JobWorker:
     sessions = create_session_factory(settings.database_url)
-    destinations = DestinationRepository(sessions)
+    destinations = DestinationRepository(settings.mailbox_account_id)
     active_destinations = destinations.active_for_account(settings.mailbox_account_id)
     if not active_destinations:
         raise ValueError(
             "No active destinations configured for MAILBOX_ACCOUNT_ID="
-            f"{settings.mailbox_account_id!r}; add at least one row to destinations"
-        )
-    if REVIEW_DESTINATION_ID not in active_destinations:
-        raise ValueError(
-            f"Active review destination {REVIEW_DESTINATION_ID!r} is missing for "
-            f"MAILBOX_ACCOUNT_ID={settings.mailbox_account_id!r}"
+            f"{settings.mailbox_account_id!r}; enable at least one destination in the shared catalog"
         )
     jobs = JobStore(sessions, settings.worker_id)
     agent = build_ai_agent(settings)
     classifier = ClassificationService(agent, ClassificationPromptBuilder())
-    validate_ai_request = ValidateAiRequest(
-        destinations=destinations,
-        quota=DailyAiRequestQuota(sessions, settings.ai_max_requests_per_day),
+    acquire_ai_request_permit = AcquireAiRequestPermit(
+        quota=DailyAiRequestQuota(sessions, settings.ai_daily_request_limit),
         provider=settings.ai_provider,
     )
     process = EmailClassificationProcess(
         steps=[
             GetEmail(EmailRecordReader(sessions)),
+            DetectConfiguredFilters(),
+            DetectNdr(destinations),
             PrepareData(settings.ai_max_body_characters),
-            validate_ai_request,
-            ClassifyBySubject(
-                classifier=classifier,
-                confidence_threshold=settings.subject_confidence_threshold,
-            ),
-            # Reserve another request only if subject classification needs the body.
-            validate_ai_request,
+            ValidateAiRequest(destinations),
+            acquire_ai_request_permit,
             ClassifyByBody(
                 classifier=classifier,
                 confidence_threshold=settings.ai_confidence_threshold,
             ),
-            MarkAsDone(jobs),
-        ]
+        ],
+        results=jobs,
+        diagnostics=DatabaseDiagnosticStore(sessions),
     )
     return JobWorker(
         process=process,
