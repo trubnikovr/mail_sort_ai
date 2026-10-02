@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -12,6 +13,18 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
+    if not os.environ.get("DATABASE_URL"):
+        project_root = Path(__file__).resolve().parents[3]
+        env_file = project_root / ".env"
+        if env_file.exists():
+            for raw_line in env_file.read_text().splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                key, separator, value = line.partition("=")
+                if separator and key.strip() == "DATABASE_URL":
+                    os.environ["DATABASE_URL"] = value.strip().strip('"').strip("'")
+                    break
     try:
         return normalize_database_url(os.environ["DATABASE_URL"])
     except KeyError as error:

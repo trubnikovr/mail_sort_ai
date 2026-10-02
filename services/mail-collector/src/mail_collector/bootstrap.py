@@ -4,7 +4,6 @@ from .infrastructure.mailbox_source_factory import MailboxSourceFactory
 from .infrastructure.persistence import (
     EmailJobPublisher,
     EmailRecordStore,
-    MailboxCursorStore,
 )
 from .mailboxes.registry import MailboxSourceRegistry
 from .infrastructure.settings import Settings
@@ -21,6 +20,5 @@ def build_synchronization_service(settings: Settings) -> MailboxSynchronizationS
     return MailboxSynchronizationService(
         mail_sources=MailboxSourceRegistry(mail_sources),
         job_publisher=EmailJobPublisher(sessions),
-        cursor_store=MailboxCursorStore(sessions),
         email_records=EmailRecordStore(sessions),
     )

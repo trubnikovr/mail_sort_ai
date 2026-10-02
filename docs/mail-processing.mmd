@@ -9,7 +9,7 @@ sequenceDiagram
     participant Router as mail-router
 
     Mailbox->>Collector: Read new messages
-    Collector->>DB: Save email_records
+    Collector->>DB: Save email_records and idempotent job
     Collector->>DB: Enqueue classify_email
 
     Decision->>DB: Claim classify_email (FOR UPDATE SKIP LOCKED)

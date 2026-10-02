@@ -7,5 +7,5 @@ class MailboxSource(ABC):
     """Provider-specific source of mailbox messages."""
 
     @abstractmethod
-    def collect(self, account: MailboxAccount, cursor: str | None) -> SyncPage:
+    def collect(self, account: MailboxAccount) -> SyncPage:
         raise NotImplementedError

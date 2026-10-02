@@ -22,8 +22,3 @@ class DiscoveredMessage:
 @dataclass(frozen=True, slots=True)
 class SyncPage:
     messages: tuple[DiscoveredMessage, ...]
-    next_cursor: str
-
-
-class CursorExpiredError(RuntimeError):
-    """The provider can no longer incrementally sync from this cursor."""

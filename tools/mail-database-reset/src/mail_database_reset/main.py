@@ -14,7 +14,6 @@ TABLES_TO_CLEAR = (
     "audit_logs",
     "jobs",
     "email_records",
-    "mailbox_cursors",
     "ai_daily_usage",
     "sorting_rules",
     "destinations",

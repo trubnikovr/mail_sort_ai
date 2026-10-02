@@ -6,14 +6,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from mail_sort_contracts import ClassifyEmailJob
-from mail_sort_database.models import EmailRecord, Job, MailboxCursor
+from mail_sort_database.models import EmailRecord, Job
 from mail_sort_database.session import session_scope
 
 from mail_collector.mailboxes.models import DiscoveredMessage, MailboxAccount
 from mail_collector.synchronization.ports import (
     EmailJobPublisherPort,
     EmailRecordStorePort,
-    MailboxCursorStorePort,
 )
 
 
@@ -47,32 +46,6 @@ class EmailJobPublisher(EmailJobPublisherPort):
             result = session.execute(statement)
             if result.rowcount:
                 session.execute(text("SELECT pg_notify('mail_jobs', 'new')"))
-
-
-class MailboxCursorStore(MailboxCursorStorePort):
-    """Stores the last durable IMAP UID for each mailbox account."""
-
-    def __init__(self, sessions: sessionmaker[Session]) -> None:
-        self._sessions = sessions
-
-    def get(self, account_id: str) -> str | None:
-        with session_scope(self._sessions) as session:
-            return session.scalar(
-                select(MailboxCursor.cursor).where(MailboxCursor.account_id == account_id)
-            )
-
-    def save(self, account_id: str, cursor: str) -> None:
-        now = datetime.now(UTC)
-        statement = (
-            insert(MailboxCursor)
-            .values(account_id=account_id, cursor=cursor, updated_at=now)
-            .on_conflict_do_update(
-                index_elements=[MailboxCursor.account_id],
-                set_={"cursor": cursor, "updated_at": now},
-            )
-        )
-        with session_scope(self._sessions) as session:
-            session.execute(statement)
 
 
 class EmailRecordStore(EmailRecordStorePort):

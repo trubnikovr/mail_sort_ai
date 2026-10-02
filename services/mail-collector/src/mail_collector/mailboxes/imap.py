@@ -1,43 +1,37 @@
-from collections.abc import Callable
 from datetime import UTC, datetime
 from email import policy
 from email.parser import BytesParser
 import imaplib
+import ssl
 
-from .email_body import extract_body
 from .models import DiscoveredMessage, MailboxAccount, SyncPage
 from .port import MailboxSource
 
 
 class ImapMailboxSource(MailboxSource):
-    """IMAP adapter that uses monotonic UIDs as its sync cursor."""
+    """Reads unread messages from the configured IMAP folder."""
 
-    def __init__(
-        self,
-        connection_factory: Callable[[MailboxAccount], imaplib.IMAP4],
-    ) -> None:
-        # The factory owns TLS, authentication, and secret retrieval.
-        self._connection_factory = connection_factory
+    def __init__(self, host: str, port: int, username: str, password: str) -> None:
+        self._host = host
+        self._port = port
+        self._username = username
+        self._password = password
 
-    def collect(self, account: MailboxAccount, cursor: str | None) -> SyncPage:
-        last_uid = int(cursor or "0")
-        session = self._connection_factory(account)
+    def collect(self, account: MailboxAccount) -> SyncPage:
+        session = imaplib.IMAP4_SSL(
+            host=self._host,
+            port=self._port,
+            ssl_context=ssl.create_default_context(),
+        )
+        status, _ = session.login(self._username, self._password)
+        if status != "OK":
+            session.logout()
+            raise RuntimeError("IMAP authentication failed")
         try:
             status, _ = session.select(account.mailbox, readonly=True)
             if status != "OK":
                 raise RuntimeError(f"Could not select IMAP mailbox {account.mailbox!r}")
-            if cursor is None:
-                # Establish a high-water mark without importing the mailbox backlog.
-                status, data = session.uid("SEARCH", None, "ALL")
-                if status != "OK":
-                    raise RuntimeError("IMAP UID SEARCH for initial cursor failed")
-                uids = [int(value) for value in data[0].split()] if data and data[0] else []
-                return SyncPage(messages=(), next_cursor=str(max(uids, default=0)))
-            status, data = session.uid(
-                "SEARCH",
-                None,
-                f"UNSEEN UID {last_uid + 1}:*",
-            )
+            status, data = session.uid("SEARCH", None, "UNSEEN")
             if status != "OK":
                 raise RuntimeError("IMAP UID SEARCH failed")
             uids = [int(value) for value in data[0].split()] if data and data[0] else []
@@ -45,8 +39,7 @@ class ImapMailboxSource(MailboxSource):
         finally:
             session.logout()
 
-        next_cursor = str(max(uids, default=last_uid))
-        return SyncPage(messages=messages, next_cursor=next_cursor)
+        return SyncPage(messages=messages)
 
     @staticmethod
     def _read_message(session: imaplib.IMAP4, uid: int) -> DiscoveredMessage:
@@ -76,9 +69,68 @@ class ImapMailboxSource(MailboxSource):
         return DiscoveredMessage(
             provider_message_id=str(uid),
             headers=headers,
-            body=extract_body(message),
+            body=ImapMailboxSource._extract_body(message),
             received_at=ImapMailboxSource._received_at(message),
         )
+
+    @staticmethod
+    def _extract_body(message: object) -> str:
+        from email.message import Message
+
+        if not isinstance(message, Message):
+            return ""
+        if not message.is_multipart():
+            return ImapMailboxSource._decode_part(message)
+
+        plain_parts: list[str] = []
+        html_parts: list[str] = []
+        for part in message.walk():
+            if part.is_multipart() or part.get_content_disposition() == "attachment":
+                continue
+            content_type = part.get_content_type()
+            if content_type not in {"text/plain", "text/html"}:
+                continue
+            decoded = ImapMailboxSource._decode_part(part)
+            if decoded:
+                (plain_parts if content_type == "text/plain" else html_parts).append(decoded)
+
+        if plain_parts:
+            return "\n".join(plain_parts).strip()
+        if html_parts:
+            from html import unescape
+            from html.parser import HTMLParser
+
+            class _TextExtractor(HTMLParser):
+                def __init__(self) -> None:
+                    super().__init__()
+                    self.parts: list[str] = []
+
+                def handle_data(self, data: str) -> None:
+                    self.parts.append(data)
+
+            parser = _TextExtractor()
+            parser.feed("\n".join(html_parts))
+            return unescape(" ".join(parser.parts)).strip()
+        return ""
+
+    @staticmethod
+    def _decode_part(part: object) -> str:
+        from email.message import Message
+
+        if not isinstance(part, Message):
+            return ""
+        try:
+            content = part.get_content()
+        except (LookupError, UnicodeDecodeError, AttributeError):
+            payload = part.get_payload(decode=True)
+            if not payload:
+                return ""
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                content = payload.decode(charset, errors="replace")
+            except LookupError:
+                content = payload.decode("utf-8", errors="replace")
+        return content.strip() if isinstance(content, str) else ""
 
     @staticmethod
     def _received_at(message: object) -> datetime | None:

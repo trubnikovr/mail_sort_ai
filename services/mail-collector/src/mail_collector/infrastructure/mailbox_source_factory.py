@@ -2,7 +2,6 @@ from collections.abc import Callable
 
 from mail_sort_contracts import MailProvider
 
-from mail_collector.infrastructure.imap_connection import ImapConnectionFactory
 from mail_collector.mailboxes.ews import EwsMailboxSource
 from mail_collector.mailboxes.imap import ImapMailboxSource
 from mail_collector.mailboxes.port import MailboxSource
@@ -26,7 +25,12 @@ class MailboxSourceFactory:
             raise ValueError(f"Unsupported mailbox provider: {provider}") from error
 
     def _build_imap(self) -> ImapMailboxSource:
-        return ImapMailboxSource(ImapConnectionFactory(self._settings))
+        return ImapMailboxSource(
+            host=self._settings.imap_host or "",
+            port=self._settings.imap_port,
+            username=self._settings.imap_username or "",
+            password=self._settings.imap_app_password or "",
+        )
 
     def _build_ews(self) -> EwsMailboxSource:
         return EwsMailboxSource(

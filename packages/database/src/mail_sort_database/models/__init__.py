@@ -5,7 +5,6 @@ from .base import Base
 from .destination import Destination
 from .email_record import EmailRecord
 from .job import Job
-from .mailbox_cursor import MailboxCursor
 from .sorting_rule import SortingRule
 
 __all__ = [
@@ -17,6 +16,5 @@ __all__ = [
     "Destination",
     "EmailRecord",
     "Job",
-    "MailboxCursor",
     "SortingRule",
 ]
