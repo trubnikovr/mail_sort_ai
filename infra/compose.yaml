@@ -29,6 +29,7 @@ services:
       dockerfile: infra/Dockerfile
       args:
         SERVICE: migrations
+      network: host
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
     depends_on:
@@ -42,6 +43,7 @@ services:
       dockerfile: infra/Dockerfile
       args:
         SERVICE: mail-app
+      network: host
     command: ["python", "/app/infra/run_mail_services.py"]
     env_file: ../.env
     environment:
@@ -65,6 +67,7 @@ services:
       dockerfile: infra/Dockerfile
       args:
         SERVICE: mail-alerts
+      network: host
     command: ["python", "-m", "mail_alerts.main"]
     env_file: ../.env
     environment:
@@ -81,6 +84,7 @@ services:
       dockerfile: infra/Dockerfile
       args:
         SERVICE: mail-health
+      network: host
     command: ["python", "-m", "mail_health.main"]
     env_file: ../.env
     environment:
@@ -107,6 +111,7 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.admin
+      network: host
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
