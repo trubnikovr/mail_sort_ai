@@ -5,7 +5,8 @@ from .base import Base
 from .destination import Destination
 from .email_record import EmailRecord
 from .job import Job
-from .sorting_rule import SortingRule
+from .alert import Alert
+from .app_setting import AppSetting
 
 __all__ = [
     "AiRequest",
@@ -16,5 +17,6 @@ __all__ = [
     "Destination",
     "EmailRecord",
     "Job",
-    "SortingRule",
+    "Alert",
+    "AppSetting",
 ]

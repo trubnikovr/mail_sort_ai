@@ -15,7 +15,6 @@ TABLES_TO_CLEAR = (
     "jobs",
     "email_records",
     "ai_daily_usage",
-    "sorting_rules",
     "destinations",
 )
 

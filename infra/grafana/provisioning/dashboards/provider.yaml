@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Mail Sort
+    orgId: 1
+    folder: Mail Sort
+    type: file
+    disableDeletion: true
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

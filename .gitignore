@@ -3,5 +3,8 @@ __pycache__/
 *.py[cod]
 .venv/
 .env
-services/*/secrets/
+apps/*/secrets/
+apps/*/web/node_modules/
+apps/*/web/dist/
+*.tsbuildinfo
 logs/

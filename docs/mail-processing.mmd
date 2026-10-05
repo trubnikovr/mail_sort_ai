@@ -7,6 +7,18 @@ sequenceDiagram
     participant Decision as mail-decision
     participant AI as AI model
     participant Router as mail-router
+    participant Health as mail-health
+    participant Alerts as mail-alerts
+    participant PRTG
+    participant Docker as Docker stdout
+    participant Alloy as Grafana Alloy
+    participant Loki as Grafana Loki
+    participant Grafana as Grafana
+    participant Supervisor as mail-app supervisor
+
+    Supervisor->>Collector: Start and monitor process
+    Supervisor->>Decision: Start and monitor process
+    Supervisor->>Router: Start and monitor process
 
     Mailbox->>Collector: Read new messages
     Collector->>DB: Save email_records and idempotent job
@@ -16,6 +28,7 @@ sequenceDiagram
     Decision->>DB: Read snapshot and active destinations
     Decision->>AI: Sender, subject, body, permitted destinations
     AI-->>Decision: destination_id and confidence
+    Decision-->>Docker: JSON logs with job ID, message ID, subject, run ID
 
     rect rgb(240, 246, 255)
         Note over Decision,DB: One database transaction
@@ -26,8 +39,26 @@ sequenceDiagram
 
     Router->>DB: Claim route_email
     Router->>Mailbox: IMAP MOVE or EWS MoveItem
+    Router-->>Docker: JSON logs with job ID, message ID, subject
     alt Provider confirms move
         Router->>DB: Complete route_email
     else Provider unavailable or fails
         Router->>DB: Retry route_email with delay
+        opt Retry budget exhausted
+            Router->>DB: Set failed and enqueue critical alert atomically
+        end
     end
+
+    PRTG->>Health: GET /health/ready
+    Health->>Supervisor: GET /health/services
+    Health->>DB: SELECT 1
+    Health->>AI: Check provider API and configured model
+    Health-->>PRTG: 200 ready or 503 degraded
+    Alerts->>DB: Claim pending alert with SKIP LOCKED
+    Alerts->>PRTG: Push alert data to HTTP Push Data Advanced sensor
+    Alerts->>DB: Mark delivered or retry later
+
+    Alloy->>Docker: Read Decision, Router, Alerts and Health logs
+    Alloy->>Loki: Send logs; keep service as the bounded label
+    Grafana->>Loki: Search message ID or subject across 30 days
+    Loki-->>Grafana: Processing and alert event timeline

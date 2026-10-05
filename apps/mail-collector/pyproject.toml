@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mail-collector"
+version = "0.1.0"
+description = "Discovers mailbox messages and creates Mail Sort jobs"
+requires-python = ">=3.12"
+dependencies = [
+  "exchangelib>=5,<6",
+  "mail-sort-contracts==0.1.0",
+  "mail-sort-database==0.1.0",
+  "mail-sort-logging==0.1.0",
+]
+
+[project.scripts]
+mail-collector = "mail_collector.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mail_collector"]

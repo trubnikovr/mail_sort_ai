@@ -1,0 +1,173 @@
+x-default-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mail_sort}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - mail-sort-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE: migrations
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  mail-app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE: mail-app
+    command: ["python", "/app/infra/run_mail_services.py"]
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health/services', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 2
+      start_period: 15s
+    stop_grace_period: 20s
+    logging: *default-logging
+    restart: unless-stopped
+
+  mail-alerts:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE: mail-alerts
+    command: ["python", "-m", "mail_alerts.main"]
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *default-logging
+    restart: unless-stopped
+
+  mail-health:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE: mail-health
+    command: ["python", "-m", "mail_health.main"]
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
+      HEALTH_HOST: 0.0.0.0
+      HEALTH_PORT: 8080
+      MAIL_APP_HEALTH_URL: http://mail-app:8081/health/services
+    ports:
+      - "${HEALTH_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mail-app:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
+    restart: unless-stopped
+
+  mail-admin:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.admin
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: 8082
+    ports:
+      - "127.0.0.1:${MAIL_ADMIN_PORT:-8082}:8082"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/api/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.8
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config.yaml:ro
+      - mail-sort-loki:/loki
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.17.1
+    user: "0:0"
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./alloy.alloy:/etc/alloy/config.alloy:ro
+      - mail-sort-alloy:/var/lib/alloy/data
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - mail-sort-grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+volumes:
+  mail-sort-postgres:
+  mail-sort-loki:
+  mail-sort-alloy:
+  mail-sort-grafana:

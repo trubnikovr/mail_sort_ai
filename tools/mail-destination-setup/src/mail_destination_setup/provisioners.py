@@ -6,7 +6,7 @@ import logging
 from exchangelib import Account, Configuration, Credentials, DELEGATE, Folder, NTLM
 from exchangelib.errors import ErrorFolderNotFound
 
-from mail_sort_repositories import DestinationRecord
+from .destination_defaults import DestinationRecord
 
 from .settings import Settings
 

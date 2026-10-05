@@ -1,0 +1,33 @@
+discovery.docker "mail_sort" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+discovery.relabel "mail_sort" {
+  targets = discovery.docker.mail_sort.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "mail-app|mail-alerts|mail-health|mail-admin"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "mail_sort" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.mail_sort.output
+  labels           = { environment = "mail-sort" }
+  refresh_interval = "5s"
+  forward_to       = [loki.write.mail_sort.receiver]
+}
+
+loki.write "mail_sort" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

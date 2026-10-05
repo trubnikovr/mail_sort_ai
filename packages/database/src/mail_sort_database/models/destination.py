@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, String, UniqueConstraint
+from sqlalchemy import Boolean, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -14,5 +14,7 @@ class Destination(Base):
     account_id: Mapped[str] = mapped_column(String(128), index=True)
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(String(512), default="")
+    instruction: Mapped[str] = mapped_column(Text, default="")
     mailbox: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    use_for_ai: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -9,6 +9,9 @@ mail-collector ──► PostgreSQL ──► mail-decision ──► AI
                          │          route_email
                          │               │
                          └────────► mail-router ──► destination folder
+                           ▲
+                           │ read-only admin API
+                    mail-admin (React SPA)
 ```
 
 ## Границы сервисов
@@ -19,11 +22,11 @@ mail-collector ──► PostgreSQL ──► mail-decision ──► AI
   записывает аудит и публикует `route_email`.
 - `mail-router` выполняет действие через выбранный почтовый адаптер.
 
-Сервисы не импортируют друг друга. Общие transport/domain-контракты находятся в
+Приложения не импортируют друг друга. Общие transport/domain-контракты находятся в
 `packages/contracts`, модели и единая история Alembic — в `packages/database`.
-Общий ручной каталог назначений (`tuple`) и репозиторий находятся в
-`packages/repositories`; Decision и Router не читают назначения из БД. Decision и Router
-сохраняют свои классы-адаптеры; остальные репозитории остаются внутри сервисов.
+Начальные назначения находятся в `tools/mail-destination-setup`, а их рабочая
+конфигурация хранится в PostgreSQL. Decision и Router читают назначения из БД
+через собственные сервисные адаптеры.
 
 ## Гарантии
 

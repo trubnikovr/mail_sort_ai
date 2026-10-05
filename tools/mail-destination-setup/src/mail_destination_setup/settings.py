@@ -7,6 +7,7 @@ from pathlib import Path
 class Settings:
     mailbox_provider: str
     mailbox_account_id: str
+    database_url: str
     imap_host: str | None = None
     imap_port: int = 993
     imap_username: str | None = None
@@ -24,6 +25,7 @@ class Settings:
         settings = cls(
             mailbox_provider=provider,
             mailbox_account_id=cls._required("MAILBOX_ACCOUNT_ID"),
+            database_url=cls._required("DATABASE_URL"),
             imap_host=cls._optional("IMAP_HOST"),
             imap_port=cls._positive_int("IMAP_PORT", 993),
             imap_username=cls._optional("IMAP_USERNAME"),

@@ -27,8 +27,10 @@ def add_destination(settings: Settings, destination_id: str, name: str, mailbox:
         account_id=settings.mailbox_account_id,
         name=name,
         description=description,
+        instruction=description,
         mailbox=mailbox,
         is_active=True,
+        use_for_ai=True,
     )
     statement = statement.on_conflict_do_update(
         index_elements=[Destination.id],
@@ -36,8 +38,10 @@ def add_destination(settings: Settings, destination_id: str, name: str, mailbox:
             "account_id": statement.excluded.account_id,
             "name": statement.excluded.name,
             "description": statement.excluded.description,
+            "instruction": statement.excluded.instruction,
             "mailbox": statement.excluded.mailbox,
             "is_active": statement.excluded.is_active,
+            "use_for_ai": statement.excluded.use_for_ai,
         },
     )
     with session_scope(create_session_factory(settings.database_url)) as session:

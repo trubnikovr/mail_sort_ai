@@ -1,8 +1,23 @@
 [project]
 name = "mail-sort-workspace"
 version = "0.1.0"
-description = "Development workspace for Mail Sort services and shared packages"
+description = "Development workspace for Mail Sort applications and shared packages"
 requires-python = ">=3.12"
+dependencies = [
+  "mail-sort-contracts",
+  "mail-sort-database",
+  "mail-sort-logging",
+  "mail-sort-alerts",
+  "mail-collector",
+  "mail-decision",
+  "mail-router",
+  "mail-alerts",
+  "mail-health",
+  "mail-admin-api",
+  "mail-destination-setup",
+  "mail-database-reset",
+  "mail-job-inspect",
+]
 
 [tool.uv]
 package = false
@@ -10,11 +25,26 @@ package = false
 [tool.uv.sources]
 mail-sort-contracts = { workspace = true }
 mail-sort-database = { workspace = true }
-mail-sort-repositories = { workspace = true }
+mail-sort-logging = { workspace = true }
+mail-sort-alerts = { workspace = true }
+mail-collector = { workspace = true }
+mail-decision = { workspace = true }
+mail-router = { workspace = true }
+mail-alerts = { workspace = true }
+mail-health = { workspace = true }
+mail-admin-api = { workspace = true }
+mail-destination-setup = { workspace = true }
+mail-database-reset = { workspace = true }
+mail-job-inspect = { workspace = true }
 
 [tool.uv.workspace]
 members = [
   "packages/*",
-  "services/*",
+  "apps/mail-alerts",
+  "apps/mail-collector",
+  "apps/mail-decision",
+  "apps/mail-health",
+  "apps/mail-router",
+  "apps/mail-admin/api",
   "tools/*",
 ]

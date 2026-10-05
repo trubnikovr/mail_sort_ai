@@ -1,41 +1,87 @@
 # Mail Sort
 
-AI-assisted сортировка почты. Система состоит из трёх независимых сервисов:
+AI-assisted сортировка почты. Обработка разделена на три сервиса:
 
 - `mail-collector` получает письма и создаёт задачи классификации;
 - `mail-decision` выбирает разрешённую папку с помощью AI;
 - `mail-router` применяет выбранный маршрут через IMAP или EWS.
+
+Для текущего одиночного сервера Docker Compose запускает эти три процесса в одном
+контейнере `mail-app`. Supervisor перезапускает упавший процесс и публикует
+состояние процессов для health-проверки.
 
 Архитектура и гарантии доставки описаны в [docs](docs/README.md).
 
 ## Требования
 
 - Python 3.12+;
+- Node.js 22+ для локальной сборки админки;
 - PostgreSQL 16+;
 - доступ к почте по IMAP или on-premises EWS/NTLM.
 
 ## Установка
 
-Из корня репозитория:
+Установите `uv` один раз ([инструкция](https://docs.astral.sh/uv/getting-started/installation/)),
+затем из корня репозитория выполните одну команду:
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e packages/contracts
-pip install -e packages/database
-pip install -e packages/repositories
-pip install -e tools/mail-destination-setup
-pip install -e tools/mail-database-reset
-pip install -e tools/mail-job-inspect
-pip install -e services/mail-collector
-pip install -e services/mail-decision
-pip install -e services/mail-router
-cp .env.example .env
+uv sync
 ```
 
-Заполните `.env`. Выберите `MAILBOX_PROVIDER=imap` или
+Корневой `pyproject.toml` объявляет все workspace-пакеты, приложения и tools;
+`uv sync` ставит их в `.venv` и связывает локальные пакеты редактируемо. Запускайте
+команды через `uv run`, например:
+
+```bash
+uv run python -m mail_collector.main
+```
+
+Или активируйте окружение:
+
+```bash
+source .venv/bin/activate
+```
+
+Создайте `.env` из шаблона, только если его ещё нет; существующий `.env` не
+перезаписывайте. Заполните настройки и выберите `MAILBOX_PROVIDER=imap` или
 `MAILBOX_PROVIDER=ews`; полный список параметров и примеры находятся в
 [`.env.example`](.env.example).
+
+## Admin web
+
+Админка — SPA на React и TypeScript: Vite собирает клиент, TanStack Router
+управляет страницами, TanStack Query — запросами к API, TanStack Table — списками.
+FastAPI предоставляет JSON API и OpenAPI (`/docs`); production-контейнер отдаёт
+собранную статику и API с одного адреса. Первая версия позволяет смотреть
+сводку, искать письма, открывать тело и историю обработки, искать сохранённые в
+PostgreSQL события аудита/классификации, а также просматривать настройки папок;
+данные писем и назначения доступны только для просмотра. Полные технические логи
+контейнеров доступны в Grafana. На странице настроек можно приостановить и возобновить
+Decision; флаг `mail_decision.enabled` хранится в таблице `app_settings`.
+При распознанной ошибке оплаты AI Decision сам включит паузу, сохранит критический
+алерт для PRTG и вернёт текущее письмо в очередь без расхода попытки.
+
+Локальная разработка из корня репозитория, в двух терминалах:
+
+```bash
+uv run mail-admin-api
+```
+
+```bash
+cd apps/mail-admin/web
+npm install
+npm run dev
+```
+
+Откройте `http://localhost:5173`. Vite проксирует `/api` к FastAPI на `8082`.
+Для локального запуска используйте уже применённые миграции и доступную базу.
+Перед запуском задайте в `.env` `MAIL_ADMIN_USERNAME`, `MAIL_ADMIN_PASSWORD` и
+`MAIL_ADMIN_SESSION_SECRET` длиной от 32 символов. Секрет сессии
+сгенерируйте командой `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+Для Docker выполните `docker compose -f infra/compose.yaml up --build mail-admin`;
+страница будет доступна на `http://localhost:8082`. Порт привязан к loopback
+интерфейсу сервера; для удалённого доступа используйте SSH-туннель. Если админка
+работает за HTTPS reverse proxy, установите `MAIL_ADMIN_COOKIE_SECURE=true`.
 
 ## AI configuration
 
@@ -48,19 +94,21 @@ Both provider integrations are installed with the service.
 зависимости сервиса и передайте job UUID, email record UUID или provider message ID:
 
 ```bash
-pip install -e services/mail-decision
+pip install -e apps/mail-decision
 python ask_model.py EMAIL_ID
 ```
 
 Скрипт использует настройки из `.env`, показывает решение и объяснение, но не
 сохраняет результат, не создаёт route job и не расходует дневную квоту AI.
 
-## Legacy destination registration
+## Destinations
 
-The command `mail-destination-setup add` creates an EWS folder and stores a row
-in the legacy `destinations` database table. Decision and Router now use the
-manual `DESTINATIONS` tuple, so this command does not add an active Mail Sort
-destination. Use `mail-destination-setup sync` below for the current catalog.
+PostgreSQL `destinations` is the source of truth for folder paths, active state,
+and the text instruction used by classification. The separate `sorting_rules`
+table has been removed; destination-specific classification guidance is stored
+in `destinations.instruction`. `mail-destination-setup sync` inserts the initial
+catalog for an account only when destination IDs are missing, then provisions
+folders from the database. Later edits in PostgreSQL are preserved by `sync`.
 
 ## Admin tools
 
@@ -74,13 +122,12 @@ mail-destination-setup sync [--account ACCOUNT_ID]
 mail-destination-setup add --id ID --name NAME --mailbox PATH [--description TEXT]
 ```
 
-- `sync` создаёт отсутствующие папки для включённых назначений из каталога
-  `DESTINATIONS`. `--account` переопределяет `MAILBOX_ACCOUNT_ID` только для
-  выбора назначений; без флага используется значение из `.env`.
-- `add` создаёт папку EWS (включая отсутствующие родительские папки) и добавляет
-  или обновляет legacy-запись в таблице `destinations`. `--id`, `--name` и
-  `--mailbox` обязательны; `--description` необязателен и по умолчанию пустой.
-  Запись не становится активным назначением для Decision и Router.
+- `sync` добавляет в БД начальные назначения, которых там ещё нет, и создаёт
+  отсутствующие папки для активных назначений, прочитанных из БД.
+  `--account` задаёт `account_id`; без флага используется `MAILBOX_ACCOUNT_ID`.
+- `add` создаёт папку EWS и добавляет или обновляет назначение в БД. `--id`,
+  `--name` и `--mailbox` обязательны; `--description` задаёт описание и
+  инструкцию классификации.
 
 Для работы нужны переменные подключения из `.env`: `DATABASE_URL`,
 `MAILBOX_ACCOUNT_ID`, `MAILBOX_PROVIDER` и соответствующие учётные данные
@@ -97,7 +144,7 @@ mail-database-reset
 целевую базу и очищаемые таблицы, затем требует ввести имя базы для подтверждения.
 При совпадении удаляются данные приложения из таблиц `ai_requests`,
 `job_events`, `audit_logs`, `jobs`, `email_records`,
-`ai_daily_usage`, `sorting_rules` и `destinations`. Схема, `alembic_version` и
+`ai_daily_usage` и `destinations`. Схема, `alembic_version` и
 содержимое почтового ящика сохраняются. Если подтверждение не совпадает, команда
 завершается без изменений.
 
@@ -129,6 +176,11 @@ record. It is a standalone admin tool and is not part of `mail-router`.
 
 ## База данных
 
+Инструкция по запуску и обслуживанию Docker Compose находится в
+[infra/README.md](infra/README.md).
+
+### Локальная база данных
+
 Создайте базу, примените миграции и проверьте текущую ревизию:
 
 ```bash
@@ -157,23 +209,20 @@ mail-destination-setup sync
 ```
 
 Команда создаёт отсутствующие папки, включая промежуточные каталоги, и оставляет
-уже существующие. Она не изменяет БД и не переносит письма. `MAILBOX_PROVIDER=imap`
-использует IMAP; `ews` — EWS.
+уже существующие. Она инициализирует отсутствующие записи каталога в БД и не
+переносит письма. `MAILBOX_PROVIDER=imap` использует IMAP; `ews` — EWS.
 
-Назначения пока задаются вручную в `DESTINATIONS`:
-`packages/repositories/src/mail_sort_repositories/destinations.py`.
-Это tuple записей с ID, названием, инструкцией для AI, путём папки относительно `INBOX` и enabled.
-Сейчас включены «Ручная проверка», «Нет на рабочем месте», «Поставщики»,
-«Запросы на туры», «Не обслуживаем», «Реклама», «Недоставка» и «Мусор».
-Папки создаются на одном уровне внутри Inbox.
-Decision и Router используют один каталог для `MAILBOX_ACCOUNT_ID`. Таблица
-`destinations` больше не является источником назначений этих сервисов.
+При первом `mail-destination-setup sync` начальные значения берутся из
+`tools/mail-destination-setup/src/mail_destination_setup/destination_defaults.py`
+и записываются в PostgreSQL. После этого Decision, Router и синхронизация папок читают настройки
+из таблицы `destinations`; правки существующих строк начальные значения не
+перезаписывают. Инструкции для AI лежат в текстовом поле `instruction`.
 
 Перед AI Decision применяет детерминированные subject-фильтры. Сейчас тема,
 начинающаяся с `Daily Spam Report for` без учёта регистра, сразу направляется в
 `INBOX/Мусор`. Назначение `trash` доступно Router, но исключено из списка папок,
 который передаётся AI. Фильтры находятся в
-`services/mail-decision/src/mail_decision/processing/steps/rules/detect_configured_filters.py`.
+`apps/mail-decision/src/mail_decision/processing/steps/rules/detect_configured_filters.py`.
 
 Если письмо не подходит или уверенность низкая, оно получает статус review
 и направляется в `INBOX/Ручная проверка`. Ранее обработанные письма автоматически
@@ -198,13 +247,14 @@ python -m mail_router.main --once
 Для постоянной работы запустите те же модули без `--once` в отдельных
 процессах.
 
-Логи сервисов выводятся в консоль и записываются в `logs/<service>/mail-sort.log`.
-Файл ротируется каждую полночь; хранятся текущий и 14 предыдущих дневных файлов.
+Логи сервисов выводятся в stdout в JSON. Grafana Alloy собирает логи контейнеров
+`mail-app`, Alerts, Health и Admin, а Loki хранит их для поиска. Поле `service` внутри
+JSON указывает на конкретный процесс Collector, Decision или Router.
 
 ## Тесты
 
 ```bash
-python -m unittest discover -s services/mail-collector/tests -v
-PYTHONPATH=services/mail-decision/src python -m unittest discover -s services/mail-decision/tests -v
-PYTHONPATH=services/mail-router/src python -m unittest discover -s services/mail-router/tests -v
+python -m unittest discover -s apps/mail-collector/tests -v
+PYTHONPATH=apps/mail-decision/src python -m unittest discover -s apps/mail-decision/tests -v
+PYTHONPATH=apps/mail-router/src python -m unittest discover -s apps/mail-router/tests -v
 ```
