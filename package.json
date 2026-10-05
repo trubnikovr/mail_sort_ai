@@ -1,0 +1,8 @@
+{
+  "name": "mail-sort",
+  "private": true,
+  "scripts": {
+    "admin": "npm --prefix apps/mail-admin/web run dev",
+    "admin:build": "npm --prefix apps/mail-admin/web run build"
+  }
+}

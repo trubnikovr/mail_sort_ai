@@ -110,9 +110,13 @@ Router продолжают работать.
 SameSite=Lax cookie. После пяти неудачных попыток с одного адреса вход блокируется
 на 15 минут. При TLS reverse proxy включите `MAIL_ADMIN_COOKIE_SECURE=true`.
 
-Для локальной frontend-разработки запускайте API командой `uv run mail-admin-api`,
-а в `apps/mail-admin/web` — `npm run dev`. Vite проксирует API-запросы на локальный
-порт 8082. OpenAPI UI FastAPI доступен по `/docs`.
+Для локальной frontend-разработки из корня репозитория установите backend-
+зависимости командой `uv sync`, запустите API командой `uv run mail-admin-api`,
+затем во втором терминале выполните `npm --prefix apps/mail-admin/web install`
+(один раз) и `npm run admin`. Vite доступен на `http://localhost:5173` и
+проксирует API-запросы на локальный порт 8082. OpenAPI UI FastAPI доступен по
+`http://localhost:8082/docs`. Требуются доступная PostgreSQL и применённые
+миграции. Полная инструкция находится в [docs/README.md](../docs/README.md).
 
 ## Health checks и PRTG
 

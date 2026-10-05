@@ -40,4 +40,11 @@ export const api = {
     body: JSON.stringify({ value }),
   }),
   destinations: () => request<Destination[]>('/api/destinations'),
+  createDestination: (destination: Omit<Destination, 'id'> & { id: string }) => request<Destination>('/api/destinations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(destination),
+  }),
+  updateDestination: (id: string, destination: Omit<Destination, 'id'> & { id: string }) => request<Destination>(`/api/destinations/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(destination),
+  }),
+  deleteDestination: (id: string) => request<void>(`/api/destinations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }

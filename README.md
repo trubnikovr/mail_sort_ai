@@ -10,7 +10,11 @@ AI-assisted сортировка почты. Обработка разделен
 контейнере `mail-app`. Supervisor перезапускает упавший процесс и публикует
 состояние процессов для health-проверки.
 
-Архитектура и гарантии доставки описаны в [docs](docs/README.md).
+Архитектура, установка, запуск через Docker и использование админки описаны в
+[руководстве](docs/README.md). Для подробностей по Docker, логам и PRTG см.
+[infra/README.md](infra/README.md).
+
+Пошаговая установка и запуск админки отдельно: [docs/admin](docs/admin/README.md).
 
 ## Требования
 
@@ -68,9 +72,8 @@ uv run mail-admin-api
 ```
 
 ```bash
-cd apps/mail-admin/web
-npm install
-npm run dev
+npm --prefix apps/mail-admin/web install
+npm run admin
 ```
 
 Откройте `http://localhost:5173`. Vite проксирует `/api` к FastAPI на `8082`.

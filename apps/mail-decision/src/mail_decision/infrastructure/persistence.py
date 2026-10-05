@@ -9,20 +9,23 @@ from sqlalchemy.orm import Session, sessionmaker
 from mail_sort_database.models import AiDailyUsage, Alert, AppSetting, AuditLog, Destination, Job
 from mail_sort_database.session import session_scope
 from sqlalchemy.dialects.postgresql import insert
+import logging
 
 from mail_sort_contracts import MailProvider, RouteEmailJob
 from mail_decision.processing.context import ClaimedEmailJob, ProcessingOutcome
 from mail_decision.processing.ports import (
-    AiBillingFailureHandler,
     AiRequestQuota,
     ClassificationResultStore,
     DecisionControl,
     DestinationRepository as DestinationRepositoryPort,
+    ProcessingFailureHandler,
 )
 from mail_decision.processing.worker import JobClaimer
 
+logger = logging.getLogger(__name__)
 
-class JobStore(ClassificationResultStore, JobClaimer, AiBillingFailureHandler):
+
+class JobStore(ClassificationResultStore, JobClaimer, ProcessingFailureHandler):
     """Claims jobs atomically and persists their terminal or retry state."""
 
     def __init__(self, sessions: sessionmaker[Session], worker_id: str) -> None:
@@ -182,64 +185,98 @@ class JobStore(ClassificationResultStore, JobClaimer, AiBillingFailureHandler):
             job.retry_at = datetime.now(UTC) + timedelta(seconds=delay_seconds)
 
     def pause_for_billing_failure(self, job_id: str, provider: str, error_code: str) -> None:
-        now = datetime.now(UTC)
-        with session_scope(self._sessions) as session:
-            job = session.get(Job, UUID(job_id), with_for_update=True)
-            if job is None or job.status != "processing" or job.locked_by != self._worker_id:
-                raise LookupError(f"Owned processing job {job_id} was not found")
-
-            setting = session.get(
-                AppSetting, "mail_decision.enabled", with_for_update=True
+        should_create_alert = False
+        setting_saved = False
+        try:
+            with session_scope(self._sessions) as session:
+                setting = session.get(AppSetting, "mail_decision.enabled", with_for_update=True)
+                if setting is None:
+                    should_create_alert = True
+                    session.add(AppSetting(
+                        key="mail_decision.enabled",
+                        value=False,
+                        description="Controls whether Decision claims new classification jobs.",
+                    ))
+                else:
+                    should_create_alert = setting.value is not False
+                    setting.value = False
+            setting_saved = True
+        except Exception:
+            logger.exception(
+                "failed to disable decision after AI billing failure: job_id=%s provider=%s code=%s",
+                job_id, provider, error_code,
             )
-            if setting is None:
-                should_create_alert = True
-                setting = AppSetting(
-                    key="mail_decision.enabled",
-                    value=False,
-                    description="Controls whether Decision claims new classification jobs.",
-                )
-                session.add(setting)
-            else:
-                should_create_alert = setting.value is not False
-                setting.value = False
 
-            job.status = "pending"
-            job.attempts = max(0, job.attempts - 1)
-            job.retry_at = now
-            job.last_error = f"AI billing limit: provider={provider} code={error_code}"[:4000]
-            job.locked_at = None
-            job.locked_by = None
-            job.completed_at = None
+        job_released = False
+        try:
+            with session_scope(self._sessions) as session:
+                job = session.get(Job, UUID(job_id), with_for_update=True)
+                if job is None or job.status != "processing" or job.locked_by != self._worker_id:
+                    raise LookupError(f"Owned processing job {job_id} was not found")
+                job.status = "pending"
+                job.attempts = max(0, job.attempts - 1)
+                job.retry_at = datetime.now(UTC)
+                job.last_error = f"AI billing limit: provider={provider} code={error_code}"[:4000]
+                job.locked_at = None
+                job.locked_by = None
+                job.completed_at = None
+            job_released = True
+        except Exception:
+            logger.exception(
+                "failed to release job after AI billing failure: job_id=%s provider=%s code=%s",
+                job_id, provider, error_code,
+            )
 
-            if should_create_alert:
-                event = AlertEvent(
-                    deduplication_key=f"ai-billing-unavailable:{provider}:{uuid4()}",
-                    source="mail-decision",
-                    title="AI billing limit reached; classification paused",
-                    message=(
-                        f"Decision was paused after {provider} reported billing/quota code "
-                        f"{error_code}. Resolve the provider billing limit, then resume Decision "
-                        "from the admin dashboard."
-                    ),
-                    severity=AlertSeverity.CRITICAL,
-                    context={
-                        "provider": provider,
-                        "error_code": error_code,
-                        "job_id": str(job.id),
-                        "account_id": job.account_id,
-                        "provider_message_id": job.provider_message_id,
-                    },
+        alert_saved = not should_create_alert
+        if should_create_alert:
+            try:
+                self._create_billing_alert(job_id, provider, error_code)
+                alert_saved = True
+            except Exception:
+                logger.exception(
+                    "failed to queue AI billing alert: job_id=%s provider=%s code=%s",
+                    job_id, provider, error_code,
                 )
-                statement = insert(Alert).values(
-                    id=uuid4(),
-                    deduplication_key=event.deduplication_key,
-                    source=event.source,
-                    severity=event.severity.value,
-                    title=event.title,
-                    message=event.message,
-                    context=event.context,
-                ).on_conflict_do_nothing(index_elements=[Alert.deduplication_key])
-                session.execute(statement)
+
+        if not (setting_saved and job_released and alert_saved):
+            raise RuntimeError(
+                "AI billing failure handling was incomplete "
+                f"(setting_saved={setting_saved}, job_released={job_released}, "
+                f"alert_saved={alert_saved})"
+            )
+
+    def _create_billing_alert(self, job_id: str, provider: str, error_code: str) -> None:
+        with session_scope(self._sessions) as session:
+            job = session.get(Job, UUID(job_id))
+            context = {
+                "provider": provider,
+                "error_code": error_code,
+                "job_id": job_id,
+                "account_id": job.account_id if job else None,
+                "provider_message_id": job.provider_message_id if job else None,
+            }
+            event = AlertEvent(
+                deduplication_key=f"ai-billing-unavailable:{provider}:{uuid4()}",
+                source="mail-decision",
+                title="AI billing limit reached; classification paused",
+                message=(
+                    f"Decision was paused after {provider} reported billing/quota code "
+                    f"{error_code}. Resolve the provider billing limit, then resume Decision "
+                    "from the admin dashboard."
+                ),
+                severity=AlertSeverity.CRITICAL,
+                context=context,
+            )
+            statement = insert(Alert).values(
+                id=uuid4(),
+                deduplication_key=event.deduplication_key,
+                source=event.source,
+                severity=event.severity.value,
+                title=event.title,
+                message=event.message,
+                context=event.context,
+            ).on_conflict_do_nothing(index_elements=[Alert.deduplication_key])
+            session.execute(statement)
 
     def retry(self, job_id: str, error: Exception, retry_delay_seconds: int) -> None:
         now = datetime.now(UTC)

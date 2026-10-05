@@ -48,9 +48,16 @@ class EmailClassificationProcess:
                 except AiBillingUnavailable as error:
                     if self._failure_handler is None:
                         raise
-                    self._failure_handler.pause_for_billing_failure(
-                        job.id, error.provider, error.error_code
-                    )
+                    try:
+                        self._failure_handler.pause_for_billing_failure(
+                            job.id, error.provider, error.error_code
+                        )
+                    except Exception:
+                        logger.exception(
+                            "billing failure handling was incomplete: job_id=%s provider=%s code=%s",
+                            job.id, error.provider, error.error_code,
+                        )
+                        raise
                     logger.critical(
                         "decision paused after AI billing failure; alert queued: job_id=%s provider=%s code=%s",
                         job.id, error.provider, error.error_code,
@@ -60,7 +67,14 @@ class EmailClassificationProcess:
                     if self._failure_handler is None:
                         raise
                     delay = error.retry_delay_seconds()
-                    self._failure_handler.defer(job.id, error, delay)
+                    try:
+                        self._failure_handler.defer(job.id, error, delay)
+                    except Exception:
+                        logger.exception(
+                            "failed to defer job after daily AI quota exhaustion: job_id=%s",
+                            job.id,
+                        )
+                        raise
                     logger.info("daily AI quota exhausted: processing paused for %s seconds", delay)
                     return ProcessingDeferred(pause_seconds=delay)
         finally:
