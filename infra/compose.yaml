@@ -37,6 +37,22 @@ services:
         condition: service_healthy
     restart: "no"
 
+  mail-destination-setup:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE: mail-destination-setup
+      network: host
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["mail-destination-setup", "sync"]
+    restart: "no"
+
   mail-app:
     build:
       context: ..
@@ -49,7 +65,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
     depends_on:
-      migrate:
+      mail-destination-setup:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health/services', timeout=2)"]
@@ -117,6 +133,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
       ADMIN_HOST: 0.0.0.0
       ADMIN_PORT: 8082
+      MAIL_APP_HEALTH_URL: http://mail-app:8081/health/services
     ports:
       - "127.0.0.1:${MAIL_ADMIN_PORT:-8082}:8082"
     depends_on:
@@ -132,6 +149,7 @@ services:
     restart: unless-stopped
 
   loki:
+    profiles: [observability]
     image: grafana/loki:3.7.8
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
@@ -140,6 +158,7 @@ services:
     restart: unless-stopped
 
   alloy:
+    profiles: [observability]
     image: grafana/alloy:v1.17.1
     user: "0:0"
     command:
@@ -156,13 +175,14 @@ services:
     restart: unless-stopped
 
   grafana:
+    profiles: [observability]
     image: grafana/grafana:13.2.3
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-configure-before-enabling-grafana}
       GF_USERS_DEFAULT_THEME: light
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - mail-sort-grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

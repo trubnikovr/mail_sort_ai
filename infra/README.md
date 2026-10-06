@@ -71,7 +71,14 @@ docker compose --env-file .env -f infra/compose.yaml down -v
 
 Для открытия Grafana перейдите на `http://<адрес-сервера>:3000` и войдите под
 учётными данными `GRAFANA_ADMIN_USER` и `GRAFANA_ADMIN_PASSWORD` из `.env`.
-Задайте собственный пароль до первого запуска.
+Grafana, Loki и Alloy являются необязательными и по умолчанию не запускаются.
+Чтобы включить их, задайте собственный `GRAFANA_ADMIN_PASSWORD` и запустите:
+
+```text
+docker compose --env-file .env -f infra/compose.yaml --profile observability up --build -d
+```
+
+Grafana слушает только loopback сервера; для удалённого доступа используйте SSH-туннель.
 
 Логи контейнеров можно смотреть и в терминале, например:
 

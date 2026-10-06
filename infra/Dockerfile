@@ -16,6 +16,7 @@ COPY apps/mail-decision ./apps/mail-decision
 COPY apps/mail-router ./apps/mail-router
 COPY apps/mail-alerts ./apps/mail-alerts
 COPY apps/mail-health ./apps/mail-health
+COPY tools/mail-destination-setup ./tools/mail-destination-setup
 
 RUN pip install --no-cache-dir \
       ./packages/contracts \
@@ -27,6 +28,8 @@ RUN pip install --no-cache-dir \
            ./apps/mail-collector \
            ./apps/mail-decision \
            ./apps/mail-router; \
+       elif [ "$SERVICE" = "mail-destination-setup" ]; then \
+         pip install --no-cache-dir ./tools/mail-destination-setup; \
        elif [ "$SERVICE" != "migrations" ]; then \
          pip install --no-cache-dir "./apps/$SERVICE"; \
        fi

@@ -78,6 +78,18 @@ export interface DecisionSetting {
   updated_at: string | null
 }
 
+export interface ManagedServiceStatus {
+  status: 'starting' | 'running' | 'restarting'
+  pid: number | null
+  restart_count: number
+  last_exit_code: number | null
+}
+
+export interface ServicesHealth {
+  status: 'ready' | 'degraded' | 'unavailable'
+  services: Partial<Record<'mail-collector' | 'mail-decision' | 'mail-router', ManagedServiceStatus>>
+}
+
 export interface AuthStatus {
   authenticated: boolean
   username?: string

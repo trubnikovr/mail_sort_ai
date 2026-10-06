@@ -7,6 +7,9 @@ name = "mail-sort-logging"
 version = "0.1.0"
 description = "Shared logging configuration for Mail Sort applications"
 requires-python = ">=3.12"
+dependencies = [
+  "mail-sort-database==0.1.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mail_sort_logging"]

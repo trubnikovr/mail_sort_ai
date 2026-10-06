@@ -1,4 +1,4 @@
-import type { AuthStatus, DashboardSummary, DecisionSetting, Destination, JobDetail, JobSummary, LogPage, Page } from '../types'
+import type { AuthStatus, DashboardSummary, DecisionSetting, Destination, JobDetail, JobSummary, LogPage, Page, ServicesHealth } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
@@ -34,6 +34,7 @@ export const api = {
     return request<LogPage>(`/api/logs?${params}`)
   },
   settings: () => request<DecisionSetting>('/api/settings'),
+  services: () => request<ServicesHealth>('/api/services'),
   setDecisionEnabled: (value: boolean) => request<DecisionSetting>('/api/settings/mail_decision.enabled', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

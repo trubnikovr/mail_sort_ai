@@ -11,7 +11,7 @@ from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import LoginRateLimiter, router as auth_router
-from .routes import dashboard, destinations, jobs, logs, settings as settings_routes
+from .routes import dashboard, destinations, jobs, logs, services, settings as settings_routes
 from .settings import Settings
 
 logger = logging.getLogger("mail_admin")
@@ -41,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(logs.router, prefix="/api", tags=["logs"])
     app.include_router(settings_routes.router, prefix="/api", tags=["settings"])
     app.include_router(destinations.router, prefix="/api", tags=["destinations"])
+    app.include_router(services.router, prefix="/api", tags=["services"])
 
     @app.get("/api/health", tags=["health"])
     def health() -> dict[str, str]:
