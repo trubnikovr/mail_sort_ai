@@ -13,10 +13,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY packages/database ./packages/database
+COPY packages/logging ./packages/logging
 COPY apps/mail-admin/api ./apps/mail-admin/api
 COPY --from=web-build /web/dist /app/web/dist
 
-RUN pip install --no-cache-dir ./packages/database ./apps/mail-admin/api
+RUN pip install --no-cache-dir ./packages/database ./packages/logging ./apps/mail-admin/api
 
 EXPOSE 8082
 CMD ["mail-admin-api"]

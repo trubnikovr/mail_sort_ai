@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Activity, ArrowDownLeft, BrainCircuit, Check, ChevronDown, CirclePause, CirclePlay, CircleHelp, FolderCog, LayoutDashboard, LoaderCircle, LogOut, Mail, Settings2 } from 'lucide-react'
+import { Activity, ArrowDownLeft, BrainCircuit, Check, ChevronDown, CirclePause, CirclePlay, CircleHelp, FolderCog, LayoutDashboard, LoaderCircle, LogOut, Mail, ScrollText, Settings2 } from 'lucide-react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -10,6 +10,7 @@ const navigation = [
   { to: '/mail', label: 'Письма', icon: Mail },
   { to: '/destinations', label: 'Папки', icon: FolderCog },
   { to: '/logs', label: 'Журнал', icon: Activity },
+  { to: '/system-logs', label: 'Логи', icon: ScrollText },
   { to: '/settings', label: 'Настройки', icon: Settings2 },
 ] as const
 
@@ -34,7 +35,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const active = location.pathname.startsWith('/mail') ? '/mail'
     : location.pathname.startsWith('/destinations') ? '/destinations'
       : location.pathname.startsWith('/logs') ? '/logs'
-        : location.pathname.startsWith('/settings') ? '/settings' : '/'
+        : location.pathname.startsWith('/system-logs') ? '/system-logs'
+          : location.pathname.startsWith('/settings') ? '/settings' : '/'
   const serviceEntries = [
     ['mail-collector', 'Collector'],
     ['mail-decision', 'Decision'],
@@ -69,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     <div className="lg:pl-[252px]">
       <header className="sticky top-0 z-20 flex h-[68px] items-center justify-between border-b border-line bg-white/90 px-5 backdrop-blur-md sm:px-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400"><span className="font-semibold text-slate-600">Почтовая система</span><span>/</span><span className="capitalize text-ink">{active === '/' ? 'Обзор' : active === '/destinations' ? 'Папки' : active.slice(1)}</span></div>
+        <div className="flex items-center gap-2 text-sm text-slate-400"><span className="font-semibold text-slate-600">Почтовая система</span><span>/</span><span className="capitalize text-ink">{active === '/' ? 'Обзор' : active === '/destinations' ? 'Папки' : active === '/logs' ? 'Журнал' : active === '/system-logs' ? 'Логи' : active.slice(1)}</span></div>
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="relative">
             <button onClick={() => setServicesOpen(open => !open)} aria-expanded={servicesOpen} className="focus-ring inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-white px-2.5 text-[11px] font-semibold text-slate-600 sm:gap-2 sm:px-3">

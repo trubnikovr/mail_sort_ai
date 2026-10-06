@@ -71,6 +71,21 @@ export interface LogPage extends Page<ProcessingLog> {
   total: number
 }
 
+export interface SystemLogEntry {
+  id: string
+  created_at: string
+  level: string
+  service: string
+  logger: string
+  message: string
+  exception: string | null
+  context: Record<string, unknown>
+}
+
+export interface SystemLogPage extends Page<SystemLogEntry> {
+  total: number
+}
+
 export interface DecisionSetting {
   key: 'mail_decision.enabled'
   value: boolean

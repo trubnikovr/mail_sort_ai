@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 import atexit
+import copy
 import json
 import logging
 from logging.handlers import QueueHandler, QueueListener
@@ -9,6 +10,7 @@ from os import getenv
 from queue import Full, Queue
 import sys
 from threading import Lock
+import time
 from typing import Any, Iterator
 
 from sqlalchemy import delete, insert
@@ -67,13 +69,14 @@ class PostgresLogHandler(logging.Handler):
         self._engine = create_engine_from_url(database_url)
         self._retention_days = max(1, int(getenv("SYSTEM_LOG_RETENTION_DAYS", "30")))
         self._since_cleanup = 0
+        self._last_cleanup = 0.0
         self._last_error_notice = 0.0
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
             message = record.getMessage()[:8192]
-            exception = self.formatter.formatException(record.exc_info)[:20_000] if record.exc_info else None
-            context = json.loads(json.dumps(_LOG_CONTEXT.get(), default=str))
+            exception = getattr(record, "mail_sort_exception", None)
+            context = json.loads(json.dumps(getattr(record, "mail_sort_context", {}), default=str))
             values = {
                 "created_at": datetime.fromtimestamp(record.created, UTC),
                 "level": record.levelname[:16],
@@ -86,13 +89,14 @@ class PostgresLogHandler(logging.Handler):
             with self._engine.begin() as connection:
                 connection.execute(insert(SystemLog).values(**values))
                 self._since_cleanup += 1
-                if self._since_cleanup >= 1000:
+                now = time.monotonic()
+                if self._since_cleanup >= 1000 or now - self._last_cleanup >= 86400:
                     cutoff = datetime.now(UTC) - timedelta(days=self._retention_days)
                     connection.execute(delete(SystemLog).where(SystemLog.created_at < cutoff))
                     self._since_cleanup = 0
+                    self._last_cleanup = now
         except (SQLAlchemyError, OSError, ValueError, TypeError) as error:
             # The console handler remains the durable fallback if PostgreSQL is unavailable.
-            import time
             now = time.monotonic()
             if now - self._last_error_notice >= 60:
                 self._last_error_notice = now
@@ -106,6 +110,22 @@ class PostgresLogHandler(logging.Handler):
 
 
 class BoundedQueueHandler(QueueHandler):
+    def prepare(self, record: logging.LogRecord) -> logging.LogRecord:
+        # Capture context while still on the application thread. ContextVars do not
+        # propagate to QueueListener's worker thread.
+        prepared = copy.copy(record)
+        prepared.msg = record.getMessage()
+        prepared.args = None
+        prepared.mail_sort_context = dict(_LOG_CONTEXT.get())
+        prepared.mail_sort_exception = (
+            logging.Formatter().formatException(record.exc_info)[:20_000]
+            if record.exc_info
+            else None
+        )
+        prepared.exc_info = None
+        prepared.exc_text = None
+        return prepared
+
     def enqueue(self, record: logging.LogRecord) -> None:
         try:
             self.queue.put_nowait(record)
@@ -136,7 +156,6 @@ def configure_logging(service_name: str) -> None:
     database_url = getenv("DATABASE_URL", "").strip()
     if database_url:
         database_handler = PostgresLogHandler(service_name, database_url)
-        database_handler.setFormatter(JsonFormatter(service_name))
         database_handler.setLevel(getattr(logging, getenv("SYSTEM_LOG_LEVEL", "INFO").upper(), logging.INFO))
         log_queue: Queue[logging.LogRecord] = Queue(maxsize=5000)
         handlers.append(BoundedQueueHandler(log_queue))

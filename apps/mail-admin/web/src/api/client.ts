@@ -1,4 +1,4 @@
-import type { AuthStatus, DashboardSummary, DecisionSetting, Destination, JobDetail, JobSummary, LogPage, Page, ServicesHealth } from '../types'
+import type { AuthStatus, DashboardSummary, DecisionSetting, Destination, JobDetail, JobSummary, LogPage, Page, ServicesHealth, SystemLogPage } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
@@ -32,6 +32,10 @@ export const api = {
   logs: (q: string, offset = 0) => {
     const params = new URLSearchParams({ q, limit: '50', offset: String(offset) })
     return request<LogPage>(`/api/logs?${params}`)
+  },
+  systemLogs: (q: string, offset = 0) => {
+    const params = new URLSearchParams({ q, limit: '50', offset: String(offset) })
+    return request<SystemLogPage>(`/api/system-logs?${params}`)
   },
   settings: () => request<DecisionSetting>('/api/settings'),
   services: () => request<ServicesHealth>('/api/services'),

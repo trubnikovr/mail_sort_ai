@@ -58,10 +58,11 @@ docker compose --env-file .env -f infra/compose.yaml down -v
 
 ## Логи и журнал обработки
 
-В админке откройте **Журнал** и ищите по теме письма, provider message ID или ID
-задачи. В журнале отображаются события аудита, этапы классификации и AI-запросы,
-сохранённые в PostgreSQL (`audit_logs`, `job_events`, `ai_requests`). Это
-структурированные события обработки, а не полный stdout лог приложения.
+В админке на странице **Журнал** ищите события аудита, этапы классификации и
+AI-запросы по теме письма, provider message ID или ID задачи (`audit_logs`,
+`job_events`, `ai_requests`). Технические логи приложений открываются отдельно,
+на странице **Логи**; они хранятся в таблице `system_logs` 30 дней по умолчанию.
+Срок хранения можно изменить через `SYSTEM_LOG_RETENTION_DAYS`.
 
 Приложения также пишут технические JSON-логи в stdout. Alloy собирает их из
 контейнеров `mail-app`, `mail-alerts`, `mail-health` и `mail-admin`, а Loki хранит
@@ -93,8 +94,9 @@ docker compose --env-file .env -f infra/compose.yaml logs -f mail-app mail-alert
 
 `mail-admin` объединяет FastAPI JSON API и собранный Vite frontend в одном
 контейнере. Frontend использует React, TanStack Router, Query и Table. Страница
-**Журнал** ищет сохранённые в PostgreSQL события обработки по теме, ID письма и
-ID задачи. Веб-панель доступна на `http://127.0.0.1:${MAIL_ADMIN_PORT:-8082}`;
+**Журнал** показывает события обработки, а **Логи** — технические логи сервисов
+из PostgreSQL с поиском по сообщению, сервису и logger. Веб-панель доступна на
+`http://127.0.0.1:${MAIL_ADMIN_PORT:-8082}`;
 привязка к loopback
 оставляет её закрытой для прямого внешнего доступа. Для удалённой работы используйте
 SSH port forwarding, например `ssh -L 8082:127.0.0.1:8082 <server>`.

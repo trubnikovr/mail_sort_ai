@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from mail_sort_database.session import create_session_factory
+from mail_sort_logging import configure_logging
 from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -66,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def run() -> None:
     settings = Settings.from_environment()
-    logging.basicConfig(level=logging.INFO)
+    configure_logging("mail-admin")
     uvicorn.run(app, host=settings.host, port=settings.port)
 
 

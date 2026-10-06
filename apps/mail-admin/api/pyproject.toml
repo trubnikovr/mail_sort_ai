@@ -12,6 +12,7 @@ dependencies = [
   "uvicorn[standard]>=0.34,<1.0",
   "itsdangerous>=2.2,<3.0",
   "mail-sort-database==0.1.0",
+  "mail-sort-logging==0.1.0",
 ]
 
 [project.scripts]
