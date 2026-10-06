@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return <div className="min-h-screen bg-[#f5f7fb] text-ink">
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[252px] flex-col border-r border-line bg-white lg:flex">
       <Link to="/" className="flex h-[76px] items-center gap-3 border-b border-line px-6">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#6974f6] to-[#4e57d9] text-white shadow-lg shadow-indigo-200"><ArrowDownLeft className="size-5" /></span>
+        <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-accent text-white shadow-lg shadow-cyan-200"><ArrowDownLeft className="size-5" /></span>
         <span><span className="block text-sm font-extrabold tracking-tight">mail<span className="text-brand">sort</span></span><span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Control center</span></span>
       </Link>
       <div className="px-4 pt-7">
@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <div className="mt-auto p-4">
         <button onClick={() => logout.mutate()} disabled={logout.isPending} className="mt-4 flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-slate-50 disabled:opacity-60">
-          <span className="flex size-9 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">{auth.data?.username?.slice(0, 2).toUpperCase() || 'AD'}</span>
+          <span className="flex size-9 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand">{auth.data?.username?.slice(0, 2).toUpperCase() || 'AD'}</span>
           <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold">{auth.data?.username || 'Администратор'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-400">Завершить сеанс</span></span><LogOut className="size-4 text-slate-400" />
         </button>
       </div>

@@ -31,7 +31,7 @@ export function JobDetailPage() {
           <section className="surface overflow-hidden">
             <div className="flex items-center gap-2 border-b border-line px-5 py-4"><Clock3 className="size-4 text-brand" /><h2 className="text-sm font-bold">История обработки</h2></div>
             {query.data.audit.length ? <div className="divide-y divide-line">{query.data.audit.map((entry, index) => <div key={`${entry.action}-${entry.created_at}-${index}`} className="flex gap-4 p-5">
-              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-brand"><span className="text-xs font-bold">{index + 1}</span></span>
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"><span className="text-xs font-bold">{index + 1}</span></span>
               <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold">{entry.action}</span><span className="text-[11px] text-slate-400">{dateTime(entry.created_at)}</span></div>{entry.error && <p className="mt-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{entry.error}</p>}{Object.keys(entry.details).length > 0 && <pre className="mt-2 overflow-auto rounded-lg bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">{JSON.stringify(entry.details, null, 2)}</pre>}</div>
             </div>)}</div> : <div className="p-8 text-center text-sm text-muted">Записей аудита пока нет.</div>}
           </section>

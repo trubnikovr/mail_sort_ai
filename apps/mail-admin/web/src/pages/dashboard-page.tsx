@@ -32,13 +32,13 @@ export function DashboardPage() {
         <section className="surface overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-5 py-4 sm:px-6">
             <div><h2 className="text-sm font-bold">Последние письма</h2><p className="mt-1 text-xs text-muted">Недавняя активность обработки</p></div>
-            <Link to="/mail" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:text-indigo-700">Все письма <ArrowRight className="size-3.5" /></Link>
+            <Link to="/mail" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:text-brand-dark">Все письма <ArrowRight className="size-3.5" /></Link>
           </div>
           <JobTable rows={query.data.recent_jobs} />
         </section>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
           <section className="surface flex items-start gap-4 p-5">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-brand"><FolderOpen className="size-5" /></span>
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><FolderOpen className="size-5" /></span>
             <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-500">Активные папки</p><div className="mt-1 text-2xl font-bold">{query.data.destinations}</div><Link to="/destinations" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand">Посмотреть папки <ArrowRight className="size-3.5" /></Link></div>
           </section>
           <section className={`surface flex items-start gap-4 p-5 ${query.data.pending_alerts ? 'border-rose-100' : ''}`}>

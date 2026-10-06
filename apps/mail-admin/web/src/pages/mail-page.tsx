@@ -28,7 +28,7 @@ export function MailPage() {
       <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:px-5">
         <label className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={event => { setSearch(event.target.value); setOffset(0) }} placeholder="Например, тема или email отправителя" className="focus-ring h-10 w-full rounded-xl border border-line bg-[#fafbfc] pl-9 pr-9 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-300 focus:bg-white" />
+          <input value={search} onChange={event => { setSearch(event.target.value); setOffset(0) }} placeholder="Например, тема или email отправителя" className="focus-ring h-10 w-full rounded-xl border border-line bg-[#fafbfc] pl-9 pr-9 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-accent focus:bg-white" />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100" aria-label="Очистить поиск"><X className="size-4" /></button>}
         </label>
         <label className="relative flex h-10 min-w-[190px] items-center">
