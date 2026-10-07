@@ -42,8 +42,11 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 контейнеры из корня репозитория:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml up --build -d postgres migrate mail-admin
+docker compose --env-file .env -f infra/compose.yaml up --build -d postgres mail-admin
 ```
+
+При старте `mail-admin` сам проверит и применит ожидающие миграции до запуска API.
+Отдельный контейнер `migrate` не создаётся.
 
 После запуска откройте `http://localhost:8082` и войдите с данными из `.env`.
 Проверить состояние контейнера можно командой:
@@ -61,7 +64,7 @@ docker compose --env-file .env -f infra/compose.yaml logs -f mail-admin
 Остановить эти контейнеры, сохранив данные базы:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml stop mail-admin migrate postgres
+docker compose --env-file .env -f infra/compose.yaml stop mail-admin postgres
 ```
 
 Compose привязывает порт админки к loopback сервера. Для доступа к серверу
@@ -96,7 +99,8 @@ uv sync
 Compose, выполните:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml up -d postgres migrate
+docker compose --env-file .env -f infra/compose.yaml up -d postgres
+uv run python -m alembic -c packages/database/alembic.ini upgrade head
 ```
 
 Эта команда подготовит базу, не запуская контейнер API админки.

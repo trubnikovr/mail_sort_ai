@@ -20,4 +20,4 @@ COPY --from=web-build /web/dist /app/web/dist
 RUN pip install --no-cache-dir ./packages/database ./packages/logging ./apps/mail-admin/api
 
 EXPOSE 8082
-CMD ["mail-admin-api"]
+CMD ["sh", "-c", "python -m alembic -c packages/database/alembic.ini upgrade head && exec mail-admin-api"]

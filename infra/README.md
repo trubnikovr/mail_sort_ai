@@ -1,11 +1,11 @@
 # Mail Sort: Docker Compose
 
-Compose запускает PostgreSQL, одноразовый контейнер миграций, один `mail-app`
-контейнер с процессами Collector, Decision и Router, отдельный `mail-admin` для
+Compose запускает PostgreSQL, один `mail-app` контейнер с процессами Collector,
+Decision и Router, отдельный `mail-admin` для
 веб-панели, `mail-health` для внешних health checks и `mail-alerts` для доставки сохранённых в PostgreSQL критических
 событий в PRTG. Supervisor перезапускает упавший процесс внутри `mail-app` и
 отдаёт его состояние для health-проверки. Миграции проходят после готовности
-базы и до старта сервисов.
+PostgreSQL при старте `mail-admin`; остальные backend-сервисы ждут его healthcheck.
 
 ## Подготовка
 
@@ -35,7 +35,7 @@ cp .env.example .env
 репозитория:
 
 ```text
-docker compose --env-file .env -f infra/compose.yaml up --build -d
+docker compose --env-file .env -f infra/compose.yaml up --build --remove-orphans -d
 docker compose --env-file .env -f infra/compose.yaml ps
 docker compose --env-file .env -f infra/compose.yaml logs -f mail-app
 ```
@@ -89,6 +89,15 @@ docker compose --env-file .env -f infra/compose.yaml logs -f mail-app mail-alert
 
 `docker compose logs` читает stdout контейнеров напрямую. Grafana и Loki хранят
 состояние в отдельных постоянных volumes.
+
+## Синхронизация папок
+
+Отдельного Compose-сервиса для настройки destinations нет. После запуска
+`mail-app` синхронизируйте каталог и создайте отсутствующие папки в почтовом ящике:
+
+```text
+docker compose --env-file .env -f infra/compose.yaml exec mail-app mail-destination-setup sync
+```
 
 ## Admin web
 

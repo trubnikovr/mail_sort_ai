@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-ARG SERVICE=migrations
+ARG SERVICE=mail-app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
@@ -27,11 +27,10 @@ RUN pip install --no-cache-dir \
          pip install --no-cache-dir \
            ./apps/mail-collector \
            ./apps/mail-decision \
-           ./apps/mail-router; \
-       elif [ "$SERVICE" = "mail-destination-setup" ]; then \
-         pip install --no-cache-dir ./tools/mail-destination-setup; \
-       elif [ "$SERVICE" != "migrations" ]; then \
+           ./apps/mail-router \
+           ./tools/mail-destination-setup; \
+       else \
          pip install --no-cache-dir "./apps/$SERVICE"; \
        fi
 
-CMD ["python", "-m", "alembic", "-c", "packages/database/alembic.ini", "upgrade", "head"]
+CMD ["python", "/app/infra/run_mail_services.py"]
