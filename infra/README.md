@@ -1,11 +1,10 @@
 # Mail Sort: Docker Compose
 
-Compose запускает PostgreSQL, один `mail-app` контейнер с процессами Collector,
-Decision и Router, отдельный `mail-admin` для
-веб-панели, `mail-health` для внешних health checks и `mail-alerts` для доставки сохранённых в PostgreSQL критических
-событий в PRTG. Supervisor перезапускает упавший процесс внутри `mail-app` и
-отдаёт его состояние для health-проверки. Миграции проходят после готовности
-PostgreSQL при старте `mail-admin`; остальные backend-сервисы ждут его healthcheck.
+Compose запускает PostgreSQL, `mail-app` с процессами Collector, Decision и
+Router, `mail-admin`, `mail-health` и `mail-alerts` для критических событий PRTG.
+Supervisor перезапускает упавший процесс внутри `mail-app` и отдаёт его состояние
+для health-проверки. После готовности PostgreSQL `mail-admin` применяет миграции;
+остальные backend-сервисы ждут его healthcheck.
 
 ## Подготовка
 
@@ -64,31 +63,16 @@ AI-запросы по теме письма, provider message ID или ID за
 на странице **Логи**; они хранятся в таблице `system_logs` 30 дней по умолчанию.
 Срок хранения можно изменить через `SYSTEM_LOG_RETENTION_DAYS`.
 
-Приложения также пишут технические JSON-логи в stdout. Alloy собирает их из
-контейнеров `mail-app`, `mail-alerts`, `mail-health` и `mail-admin`, а Loki хранит
-для поиска в Grafana. В Grafana откройте дашборд
-**Mail Sort → Mail Sort: поиск по письму** и введите provider message ID или часть
-темы. Полные логи контейнеров по-прежнему доступны в Grafana и через Docker.
-
-Для открытия Grafana перейдите на `http://<адрес-сервера>:3000` и войдите под
-учётными данными `GRAFANA_ADMIN_USER` и `GRAFANA_ADMIN_PASSWORD` из `.env`.
-Grafana, Loki и Alloy являются необязательными и по умолчанию не запускаются.
-Чтобы включить их, задайте собственный `GRAFANA_ADMIN_PASSWORD` и запустите:
-
-```text
-docker compose --env-file .env -f infra/compose.yaml --profile observability up --build -d
-```
-
-Grafana слушает только loopback сервера; для удалённого доступа используйте SSH-туннель.
-
-Логи контейнеров можно смотреть и в терминале, например:
+Контейнеры также пишут технические JSON-логи в stdout. Их можно смотреть в
+терминале:
 
 ```text
 docker compose --env-file .env -f infra/compose.yaml logs -f mail-app mail-alerts mail-health mail-admin
 ```
 
-`docker compose logs` читает stdout контейнеров напрямую. Grafana и Loki хранят
-состояние в отдельных постоянных volumes.
+`docker compose logs` читает stdout контейнеров напрямую. Старая конфигурация
+Grafana/Loki/Alloy перемещена в `infra/old/observability` и не участвует в основном
+Compose.
 
 ## Синхронизация папок
 

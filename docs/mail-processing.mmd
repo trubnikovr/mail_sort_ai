@@ -11,9 +11,6 @@ sequenceDiagram
     participant Alerts as mail-alerts
     participant PRTG
     participant Docker as Docker stdout
-    participant Alloy as Grafana Alloy
-    participant Loki as Grafana Loki
-    participant Grafana as Grafana
     participant Supervisor as mail-app supervisor
 
     Supervisor->>Collector: Start and monitor process
@@ -29,6 +26,7 @@ sequenceDiagram
     Decision->>AI: Sender, subject, body, permitted destinations
     AI-->>Decision: destination_id and confidence
     Decision-->>Docker: JSON logs with job ID, message ID, subject, run ID
+    Decision->>DB: Persist structured system log
 
     rect rgb(240, 246, 255)
         Note over Decision,DB: One database transaction
@@ -40,6 +38,7 @@ sequenceDiagram
     Router->>DB: Claim route_email
     Router->>Mailbox: IMAP MOVE or EWS MoveItem
     Router-->>Docker: JSON logs with job ID, message ID, subject
+    Router->>DB: Persist structured system log
     alt Provider confirms move
         Router->>DB: Complete route_email
     else Provider unavailable or fails
@@ -57,8 +56,3 @@ sequenceDiagram
     Alerts->>DB: Claim pending alert with SKIP LOCKED
     Alerts->>PRTG: Push alert data to HTTP Push Data Advanced sensor
     Alerts->>DB: Mark delivered or retry later
-
-    Alloy->>Docker: Read Decision, Router, Alerts and Health logs
-    Alloy->>Loki: Send logs; keep service as the bounded label
-    Grafana->>Loki: Search message ID or subject across 30 days
-    Loki-->>Grafana: Processing and alert event timeline

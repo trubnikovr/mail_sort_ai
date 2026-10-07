@@ -2,8 +2,8 @@
 
 Mail Sort получает письма по IMAP или EWS, классифицирует их с помощью AI и
 перемещает в разрешённые папки. Для повседневного запуска проще всего использовать
-Docker Compose: он запускает PostgreSQL, миграции, обработчики писем, админку,
-проверку состояния и сбор логов.
+Docker Compose: он запускает PostgreSQL, обработчики писем, админку и проверку
+состояния. Миграции применяются при старте backend админки.
 
 ## Что понадобится
 
@@ -32,8 +32,7 @@ cp .env.example .env
 - `AI_PROVIDER`, `AI_MODEL` и `AI_AGENT_API_KEY`;
 - `POSTGRES_PASSWORD` для базы данных;
 - `MAIL_ADMIN_USERNAME`, `MAIL_ADMIN_PASSWORD` и
-  `MAIL_ADMIN_SESSION_SECRET` для входа в админку;
-- `GRAFANA_ADMIN_PASSWORD` для Grafana.
+  `MAIL_ADMIN_SESSION_SECRET` для входа в админку.
 
 Случайный секрет сессии можно получить так:
 
@@ -50,12 +49,11 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 Из корня проекта запустите все сервисы в фоне:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml up --build -d
+docker compose --env-file .env -f infra/compose.yaml up --build --remove-orphans -d
 ```
 
-Compose поднимет PostgreSQL, применит миграции и запустит обработчики, админку и
-health endpoint. Grafana/Loki можно включить отдельно; их отсутствие не мешает
-работе основной системы. При первом запуске Docker соберёт образы,
+Compose поднимет PostgreSQL, применит миграции при старте `mail-admin` и запустит
+обработчики, админку и health endpoint. При первом запуске Docker соберёт образы,
 поэтому команда может занять несколько минут.
 
 Проверьте состояние контейнеров:
@@ -68,18 +66,8 @@ docker compose --env-file .env -f infra/compose.yaml ps
 
 - Админка: `http://localhost:8082`
 - Проверка готовности: `http://localhost:8080/health/ready`
-- Grafana (если включён профиль `observability`): `http://localhost:3000`
 
-Войдите в админку с `MAIL_ADMIN_USERNAME` и `MAIL_ADMIN_PASSWORD`. Для Grafana
-сначала задайте `GRAFANA_ADMIN_USER` и `GRAFANA_ADMIN_PASSWORD` в `.env`, затем
-включите профиль наблюдения:
-
-```sh
-docker compose --env-file .env -f infra/compose.yaml --profile observability up --build -d
-```
-
-Grafana привязана к loopback интерфейсу сервера; для удалённого доступа используйте
-SSH-туннель.
+Войдите в админку с `MAIL_ADMIN_USERNAME` и `MAIL_ADMIN_PASSWORD`.
 
 Для просмотра логов:
 

@@ -31,7 +31,7 @@ export function LogsPage() {
           {search && <button onClick={() => { setSearch(''); setOffset(0) }} className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100" aria-label="Очистить поиск"><X className="size-4" /></button>}
         </label>
       </div>
-      <div className="flex items-center justify-between px-5 py-3 text-xs text-muted"><span>{query.data ? `${query.data.total.toLocaleString('ru-RU')} событий` : 'Загрузка журнала…'}</span><span>Полные логи контейнеров доступны в Grafana</span></div>
+      <div className="flex items-center justify-between px-5 py-3 text-xs text-muted"><span>{query.data ? `${query.data.total.toLocaleString('ru-RU')} событий` : 'Загрузка журнала…'}</span><span>Системные логи находятся на странице «Логи»</span></div>
       {query.isPending ? <div className="p-4"><LoadingState label="Загружаем журнал…" /></div> : query.isError ? <div className="p-4"><ErrorState message={`Не удалось загрузить журнал: ${query.error.message}`} /></div> : query.data.items.length === 0 ? <div className="px-6 py-16 text-center"><FileSearch className="mx-auto size-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-600">События не найдены</p><p className="mt-1 text-xs text-muted">Попробуйте изменить поисковый запрос.</p></div> : <div className="divide-y divide-line">
         {query.data.items.map(item => <article key={`${item.source}-${item.id}`} className="grid gap-3 px-5 py-4 lg:grid-cols-[170px_minmax(0,1fr)_auto] lg:items-start">
           <div className="text-xs text-slate-500">{dateTime(item.created_at)}</div>
