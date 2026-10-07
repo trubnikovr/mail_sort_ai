@@ -312,7 +312,12 @@ class JobStore(ClassificationResultStore, JobClaimer, ProcessingFailureHandler):
                 ))
             else:
                 job.status = "pending"
-                job.retry_at = now + timedelta(seconds=retry_delay_seconds)
+                # Retry transient provider/network failures with capped exponential backoff.
+                backoff_seconds = min(
+                    retry_delay_seconds * (2 ** max(job.attempts - 1, 0)),
+                    3600,
+                )
+                job.retry_at = now + timedelta(seconds=backoff_seconds)
 
     def _set_terminal_status(
         self,

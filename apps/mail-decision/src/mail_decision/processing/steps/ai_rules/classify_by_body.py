@@ -51,22 +51,6 @@ class ClassifyByBody(ProcessingStep):
                 context.job.id, error.provider, error.error_code,
             )
             raise
-        except Exception as error:
-            logger.error(
-                "AI classification failed; routing to review: job_id=%s error_type=%s",
-                context.job.id,
-                type(error).__name__,
-            )
-            if REVIEW_DESTINATION_ID not in context.destinations:
-                raise RuntimeError("Manual review destination is not configured") from None
-            context.outcome = ProcessingOutcome(
-                status="review",
-                destination_id=REVIEW_DESTINATION_ID,
-                source="ai_body",
-                confidence=None,
-                reason=f"AI classification failed ({type(error).__name__})",
-            )
-            return
         if response.action == "review":
             if REVIEW_DESTINATION_ID not in context.destinations:
                 raise RuntimeError("Manual review destination is not configured")
