@@ -1,7 +1,8 @@
 import logging
 from time import perf_counter
 
-from exchangelib import Account, Configuration, Credentials, DELEGATE, NTLM
+from exchangelib import Account, Configuration, Credentials, DELEGATE, Folder, NTLM
+from exchangelib.errors import ErrorFolderNotFound
 
 from mail_router.routing.registry import DestinationMailboxLookup, MailboxAction
 from mail_router.routing.tasks import ClaimedRouteJob
@@ -38,8 +39,16 @@ class EwsMoveToFolderAction(MailboxAction):
             destination = account.inbox
             destination_parts = destination_parts[1:]
         for part in destination_parts:
-            destination = destination / part
-        logger.info("EWS target folder found: job_id=%s target=%r", job.id, target)
+            try:
+                destination = destination / part
+            except ErrorFolderNotFound:
+                logger.info(
+                    "EWS destination folder missing; creating: job_id=%s folder=%r",
+                    job.id,
+                    part,
+                )
+                destination = Folder(parent=destination, name=part).save()
+        logger.info("EWS target folder ready: job_id=%s target=%r", job.id, target)
         logger.info("EWS resolving source folder: job_id=%s source=%r", job.id, self._source_mailbox)
         if self._source_mailbox.strip().lower() == "inbox":
             source = account.inbox
