@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mail-admin-api"
+name = "dashboard-api"
 version = "0.1.0"
 description = "Operational API for the Mail Sort admin console"
 requires-python = ">=3.12"
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mail-admin-api = "mail_admin_api.main:run"
+dashboard-api = "dashboard_api.main:run"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mail_admin_api"]
+packages = ["src/dashboard_api"]

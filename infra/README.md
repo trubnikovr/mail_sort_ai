@@ -1,9 +1,9 @@
 # Mail Sort: Docker Compose
 
 Compose запускает PostgreSQL, `mail-app` с процессами Collector, Decision и
-Router, `mail-admin`, `mail-health` и `mail-alerts` для критических событий PRTG.
+Router, `dashboard`, `health-monitor` и `alert-dispatcher` для критических событий PRTG.
 Supervisor перезапускает упавший процесс внутри `mail-app` и отдаёт его состояние
-для health-проверки. После готовности PostgreSQL `mail-admin` применяет миграции;
+для health-проверки. После готовности PostgreSQL `dashboard` применяет миграции;
 остальные backend-сервисы ждут его healthcheck.
 
 ## Подготовка
@@ -43,6 +43,42 @@ docker compose --env-file .env -f infra/compose.yaml logs -f mail-app
 нужен. Пути к `.env` и контексту сборки заданы относительно `infra/compose.yaml`,
 поэтому Compose запускается из корня репозитория.
 
+### Почему всегда нужен `--env-file .env`
+
+Не убирайте `--env-file .env` из команд Compose. `env_file: ../.env` в описании
+сервиса передаёт переменные внутрь контейнера, но не подставляет их в выражения
+`${...}` самого `compose.yaml`. Compose отдельно использует файл, указанный через
+`--env-file`, для этих подстановок. Без него `POSTGRES_PASSWORD` может стать
+значением по умолчанию `postgres`, и контейнеры приложения будут получать
+неправильный `DATABASE_URL`.
+
+Для контейнеров Compose хост базы данных — `postgres`, имя сервиса в сети Compose.
+Значение `DATABASE_URL` с `localhost` из корневого `.env.example` предназначено
+для локальных инструментов на хосте; Compose собирает для контейнеров URL с
+хостом `postgres` из `POSTGRES_USER`, `POSTGRES_PASSWORD` и `POSTGRES_DB`.
+
+Если в команде используете `sudo`, также передавайте `--env-file .env`: `sudo`
+может очистить переменные текущего shell, а явный файл не зависит от этого.
+В `.env` значения с `$` заключайте в одинарные кавычки, чтобы Compose не пытался
+интерполировать их как переменные.
+
+Проверить соединение с БД с тем же URL, который получит `dashboard`, можно без
+печати пароля:
+
+```text
+docker compose --env-file .env -f infra/compose.yaml run --rm --no-deps --entrypoint python dashboard -c 'import os, psycopg; c=psycopg.connect(os.environ["DATABASE_URL"]); print("DB connection OK"); c.close()'
+```
+
+Если после изменения `.env` нужно пересоздать сервисы, снова укажите тот же файл:
+
+```text
+docker compose --env-file .env -f infra/compose.yaml up -d --build --force-recreate dashboard health-monitor mail-app
+```
+
+Изменение `POSTGRES_PASSWORD` в `.env` не меняет пароль пользователя в уже
+инициализированном volume PostgreSQL. Не используйте `down -v` для починки
+подключения: эта команда удаляет volume и все данные базы.
+
 Остановка без удаления данных базы:
 
 ```text
@@ -67,25 +103,16 @@ AI-запросы по теме письма, provider message ID или ID за
 терминале:
 
 ```text
-docker compose --env-file .env -f infra/compose.yaml logs -f mail-app mail-alerts mail-health mail-admin
+docker compose --env-file .env -f infra/compose.yaml logs -f mail-app alert-dispatcher health-monitor dashboard
 ```
 
 `docker compose logs` читает stdout контейнеров напрямую. Старая конфигурация
 Grafana/Loki/Alloy перемещена в `infra/old/observability` и не участвует в основном
 Compose.
 
-## Синхронизация папок
-
-Отдельного Compose-сервиса для настройки destinations нет. После запуска
-`mail-app` синхронизируйте каталог и создайте отсутствующие папки в почтовом ящике:
-
-```text
-docker compose --env-file .env -f infra/compose.yaml exec mail-app mail-destination-setup sync
-```
-
 ## Admin web
 
-`mail-admin` объединяет FastAPI JSON API и собранный Vite frontend в одном
+`dashboard` объединяет FastAPI JSON API и собранный Vite frontend в одном
 контейнере. Frontend использует React, TanStack Router, Query и Table. Страница
 **Журнал** показывает события обработки, а **Логи** — технические логи сервисов
 из PostgreSQL с поиском по сообщению, сервису и logger. Веб-панель доступна на
@@ -102,7 +129,7 @@ Router продолжают работать.
 
 Если AI API возвращает распознанную ошибку оплаты/исчерпанного баланса, Decision
 в одной транзакции выключает этот параметр, возвращает текущую задачу в очередь
-без расхода попытки и добавляет критический alert в PostgreSQL outbox. `mail-alerts`
+без расхода попытки и добавляет критический alert в PostgreSQL outbox. `alert-dispatcher`
 доставляет его в PRTG. После пополнения баланса нажмите **Возобновить Decision**;
 задачи снова начнут обрабатываться. Обычные временные rate limit сами по себе не
 ставят Decision на паузу.
@@ -113,16 +140,16 @@ SameSite=Lax cookie. После пяти неудачных попыток с о
 на 15 минут. При TLS reverse proxy включите `MAIL_ADMIN_COOKIE_SECURE=true`.
 
 Для локальной frontend-разработки из корня репозитория установите backend-
-зависимости командой `uv sync`, запустите API командой `uv run mail-admin-api`,
-затем во втором терминале выполните `npm --prefix apps/mail-admin/web install`
-(один раз) и `npm run admin`. Vite доступен на `http://localhost:5173` и
+зависимости командой `uv sync`, запустите API командой `uv run dashboard-api`,
+затем во втором терминале выполните `npm --prefix apps/dashboard/web install`
+(один раз) и `npm run dashboard`. Vite доступен на `http://localhost:5173` и
 проксирует API-запросы на локальный порт 8082. OpenAPI UI FastAPI доступен по
 `http://localhost:8082/docs`. Требуются доступная PostgreSQL и применённые
 миграции. Полная инструкция находится в [docs/README.md](../docs/README.md).
 
 ## Health checks и PRTG
 
-`mail-health` публикует `GET /health/live` и `GET /health/ready` на порту
+`health-monitor` публикует `GET /health/live` и `GET /health/ready` на порту
 `${HEALTH_PORT:-8080}`. Первый проверяет процесс health-сервиса. Второй проверяет
 PostgreSQL и доступность настроенного AI API/model ID. Сейчас поддерживаются
 OpenAI и Gemini; проверка AI подтверждает API-доступ и наличие модели, но не
@@ -132,7 +159,7 @@ health также проверяет AWS credentials и доступность S
 порту health-сервиса сетевым правилом до PRTG.
 
 Сам `mail-app` проверяет три процесса по PID через внутренний
-`GET /health/services` на порту 8081. `mail-health` опрашивает этот endpoint и
+`GET /health/services` на порту 8081. `health-monitor` опрашивает этот endpoint и
 включает статусы каждого процесса в ответ `/health/ready`. Падение процесса
 вызывает его перезапуск supervisor-ом с увеличивающейся задержкой; пока процесс
 не восстановлен, endpoint readiness возвращает HTTP 503. Если завершится сам
@@ -146,7 +173,7 @@ health также проверяет AWS credentials и доступность S
 sensor, выберите POST и задайте URL сенсора в `PRTG_PUSH_URL` в `.env`, например
 `http://<prtg-probe>:5050/<sensor-token>`. Откройте PRTG probe port для Mail Sort.
 Настройте у сенсора limit/notification trigger для канала **Critical alerts**
-при значении больше нуля. `mail-alerts` читает outbox из PostgreSQL и повторяет
+при значении больше нуля. `alert-dispatcher` читает outbox из PostgreSQL и повторяет
 отправку при сбоях; окончательное исчерпание попыток классификации или маршрута
 создаёт critical alert в той же транзакции, что и статус `failed`. Сенсор
 показывает последнее событие; канал уведомления (email, push и т. п.) задаётся

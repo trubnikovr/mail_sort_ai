@@ -120,7 +120,7 @@ def build_health(database_engine: Engine) -> dict[str, object]:
 
 
 def main() -> None:
-    configure_logging("mail-health")
+    configure_logging("health-monitor")
     _load_local_env()
     database_url = getenv("DATABASE_URL", "").strip()
     if not database_url:

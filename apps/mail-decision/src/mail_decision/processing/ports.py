@@ -1,6 +1,17 @@
 from abc import ABC, abstractmethod
 
-from .context import ClaimedEmailJob, EmailContent, ProcessingOutcome
+from .context import ClaimedEmailJob, EmailContent, ProcessingContext, ProcessingOutcome
+from .statistics.diagnostics import DiagnosticScope
+
+
+class ProcessingWorkflow(ABC):
+    @abstractmethod
+    def execute(
+        self,
+        context: ProcessingContext,
+        diagnostics: DiagnosticScope | None,
+    ) -> None:
+        raise NotImplementedError
 
 
 class EmailReader(ABC):

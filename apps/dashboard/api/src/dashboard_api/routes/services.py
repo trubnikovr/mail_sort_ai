@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 
 from ..auth import require_admin
 
-logger = logging.getLogger("mail_admin.services")
+logger = logging.getLogger("dashboard.services")
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 MAIL_APP_HEALTH_URL = "http://mail-app:8081/health/services"

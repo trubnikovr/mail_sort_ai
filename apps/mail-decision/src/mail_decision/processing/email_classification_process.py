@@ -15,7 +15,7 @@ from .context import (
 )
 from .statistics.diagnostics import DiagnosticScope, DiagnosticStore, current_diagnostics
 from .steps.interface import ProcessingStep
-from .ports import ClassificationResultStore, ProcessingFailureHandler
+from .ports import ClassificationResultStore, ProcessingFailureHandler, ProcessingWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,13 @@ class EmailClassificationProcess:
 
     def __init__(self, steps: list[ProcessingStep], results: ClassificationResultStore,
                  diagnostics: DiagnosticStore | None = None,
-                 failure_handler: ProcessingFailureHandler | None = None) -> None:
+                 failure_handler: ProcessingFailureHandler | None = None,
+                 workflow: ProcessingWorkflow | None = None) -> None:
         self._steps = steps
         self._results = results
         self._diagnostics = diagnostics
         self._failure_handler = failure_handler
+        self._workflow = workflow
 
     def execute(self, job: ClaimedEmailJob) -> ProcessingOutcome | ProcessingDeferred:
         scope = (DiagnosticScope(self._diagnostics, job.id, str(uuid4()), job.attempt)
@@ -81,40 +83,17 @@ class EmailClassificationProcess:
             current_diagnostics.reset(token)
 
     def _execute(self, job: ClaimedEmailJob, scope: DiagnosticScope | None) -> ProcessingOutcome:
-        context = ProcessingContext(job=job)
-        decision_step = None
-        last_step = None
-
         def record(status: str, **details) -> None:
             if scope:
                 scope.record("step", status=status, details=details)
 
-        for number, step in enumerate(self._steps, start=1):
-            last_step = type(step).__name__
-            if scope:
-                scope.step, scope.step_number = last_step, number
-                scope.destinations = set(context.destinations)
-            started = perf_counter()
-            record("started")
-            logger.info("step started: job_id=%s step=%s name=%s", job.id, number, last_step)
-            try:
-                step.execute(context)
-                if context.email is not None:
-                    add_log_context(subject=context.email.subject)
-            except Exception as error:
-                record("deferred" if isinstance(error, DailyRequestLimitReached) else "failed",
-                       error_type=type(error).__name__, duration_seconds=perf_counter() - started,
-                       last_step=last_step, decision_step=None, finalization="not_started")
-                raise
-            if context.outcome is not None:
-                decision_step = last_step
-            record("decision_made" if decision_step else "completed",
-                   duration_seconds=perf_counter() - started,
-                   decision_step=decision_step, last_step=last_step,
-                   destination_id=context.outcome.destination_id if context.outcome else None,
-                   outcome_status=context.outcome.status if context.outcome else None)
-            if context.outcome is not None:
-                break
+        context = ProcessingContext(job=job)
+        if self._workflow is None:
+            self._execute_steps(context, scope)
+        else:
+            self._workflow.execute(context, scope)
+        decision_step = context.decision_step
+        last_step = context.last_step
 
         if scope:
             scope.step, scope.step_number = "finalize", len(self._steps) + 1
@@ -134,3 +113,50 @@ class EmailClassificationProcess:
                finalization="completed", duration_seconds=perf_counter() - started)
         logger.info("classification finalized: job_id=%s decision_step=%s", job.id, decision_step)
         return context.outcome
+
+    def _execute_steps(
+        self,
+        context: ProcessingContext,
+        scope: DiagnosticScope | None,
+    ) -> None:
+        def record(status: str, **details) -> None:
+            if scope:
+                scope.record("step", status=status, details=details)
+
+        for number, step in enumerate(self._steps, start=1):
+            context.last_step = type(step).__name__
+            if scope:
+                scope.step, scope.step_number = context.last_step, number
+                scope.destinations = set(context.destinations)
+            started = perf_counter()
+            record("started")
+            logger.info(
+                "step started: job_id=%s step=%s name=%s",
+                context.job.id, number, context.last_step,
+            )
+            try:
+                step.execute(context)
+                if context.email is not None:
+                    add_log_context(subject=context.email.subject)
+            except Exception as error:
+                record(
+                    "deferred" if isinstance(error, DailyRequestLimitReached) else "failed",
+                    error_type=type(error).__name__,
+                    duration_seconds=perf_counter() - started,
+                    last_step=context.last_step,
+                    decision_step=context.decision_step,
+                    finalization="not_started",
+                )
+                raise
+            if context.outcome is not None:
+                context.decision_step = context.last_step
+            record(
+                "decision_made" if context.decision_step else "completed",
+                duration_seconds=perf_counter() - started,
+                decision_step=context.decision_step,
+                last_step=context.last_step,
+                destination_id=context.outcome.destination_id if context.outcome else None,
+                outcome_status=context.outcome.status if context.outcome else None,
+            )
+            if context.outcome is not None:
+                break

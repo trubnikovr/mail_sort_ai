@@ -49,6 +49,8 @@ class ProcessingContext:
     prepared_email: EmailContent | None = None
     destinations: dict[str, str] = field(default_factory=dict)
     outcome: ProcessingOutcome | None = None
+    decision_step: str | None = None
+    last_step: str | None = None
 
 
 class DailyRequestLimitReached(RuntimeError):

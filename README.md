@@ -69,12 +69,12 @@ Decision; флаг `mail_decision.enabled` хранится в таблице `a
 Локальная разработка из корня репозитория, в двух терминалах:
 
 ```bash
-uv run mail-admin-api
+uv run dashboard-api
 ```
 
 ```bash
-npm --prefix apps/mail-admin/web install
-npm run admin
+npm --prefix apps/dashboard/web install
+npm run dashboard
 ```
 
 Откройте `http://localhost:5173`. Vite проксирует `/api` к FastAPI на `8082`.
@@ -82,7 +82,7 @@ npm run admin
 Перед запуском задайте в `.env` `MAIL_ADMIN_USERNAME`, `MAIL_ADMIN_PASSWORD` и
 `MAIL_ADMIN_SESSION_SECRET` длиной от 32 символов. Секрет сессии
 сгенерируйте командой `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-Для Docker выполните `docker compose -f infra/compose.yaml up --build mail-admin`;
+Для Docker выполните `docker compose --env-file .env -f infra/compose.yaml up --build dashboard`;
 страница будет доступна на `http://localhost:8082`. Порт привязан к loopback
 интерфейсу сервера; для удалённого доступа используйте SSH-туннель. Если админка
 работает за HTTPS reverse proxy, установите `MAIL_ADMIN_COOKIE_SECURE=true`.
@@ -110,9 +110,9 @@ python ask_model.py EMAIL_ID
 PostgreSQL `destinations` is the source of truth for folder paths, active state,
 and the text instruction used by classification. The separate `sorting_rules`
 table has been removed; destination-specific classification guidance is stored
-in `destinations.instruction`. `mail-destination-setup sync` inserts the initial
-catalog for an account only when destination IDs are missing, then provisions
-folders from the database. Later edits in PostgreSQL are preserved by `sync`.
+in `destinations.instruction`. Destinations are managed in the dashboard.
+`mail-destination-setup add` remains available to create an EWS folder and its
+destination record together.
 
 ## Admin tools
 
@@ -122,21 +122,15 @@ folders from the database. Later edits in PostgreSQL are preserved by `sync`.
 ### `mail-destination-setup`
 
 ```text
-mail-destination-setup sync [--account ACCOUNT_ID]
 mail-destination-setup add --id ID --name NAME --mailbox PATH [--description TEXT]
 ```
 
-- `sync` добавляет в БД начальные назначения, которых там ещё нет, и создаёт
-  отсутствующие папки для активных назначений, прочитанных из БД.
-  `--account` задаёт `account_id`; без флага используется `MAILBOX_ACCOUNT_ID`.
 - `add` создаёт папку EWS и добавляет или обновляет назначение в БД. `--id`,
   `--name` и `--mailbox` обязательны; `--description` задаёт описание и
   инструкцию классификации.
 
 Для работы нужны переменные подключения из `.env`: `DATABASE_URL`,
-`MAILBOX_ACCOUNT_ID`, `MAILBOX_PROVIDER` и соответствующие учётные данные
-провайдера. `add` предназначен для EWS; `sync` поддерживает настроенные IMAP и
-EWS подключения.
+`MAILBOX_ACCOUNT_ID`, `EWS_ENDPOINT`, `EWS_USERNAME` и `EWS_PASSWORD`.
 
 ### `mail-database-reset`
 
@@ -204,23 +198,10 @@ mail-database-reset
 счётчик AI-запросов и legacy-назначения/правила. Таблицу миграций,
 схему и сами письма в почтовом ящике он не меняет.
 
-Чтобы создать включённые папки каталога в подключённом ящике, настройте
-`MAILBOX_PROVIDER`, `MAILBOX_ACCOUNT_ID` и учётные данные соответствующего
-провайдера в `.env`, затем выполните:
-
-```bash
-mail-destination-setup sync
-```
-
-Команда создаёт отсутствующие папки, включая промежуточные каталоги, и оставляет
-уже существующие. Она инициализирует отсутствующие записи каталога в БД и не
-переносит письма. `MAILBOX_PROVIDER=imap` использует IMAP; `ews` — EWS.
-
-При первом `mail-destination-setup sync` начальные значения берутся из
-`tools/mail-destination-setup/src/mail_destination_setup/destination_defaults.py`
-и записываются в PostgreSQL. После этого Decision, Router и синхронизация папок читают настройки
-из таблицы `destinations`; правки существующих строк начальные значения не
-перезаписывают. Инструкции для AI лежат в текстовом поле `instruction`.
+Создавайте и редактируйте назначения в dashboard. Если нужно добавить папку EWS
+вместе с записью назначения, используйте `mail-destination-setup add`, описанную
+выше. Decision и Router читают назначения из PostgreSQL; инструкция для AI
+хранится в поле `instruction`.
 
 Перед AI Decision применяет детерминированные subject-фильтры. Сейчас тема,
 начинающаяся с `Daily Spam Report for` без учёта регистра, сразу направляется в

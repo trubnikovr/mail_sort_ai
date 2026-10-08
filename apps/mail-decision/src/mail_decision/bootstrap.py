@@ -5,6 +5,7 @@ from .classification.service import ClassificationService
 from .infrastructure.ai_agent import AiAgent
 from .infrastructure.diagnostics import DatabaseDiagnosticStore
 from .infrastructure.email_record_reader import EmailRecordReader
+from .infrastructure.langgraph_workflow import LangGraphWorkflow
 from .infrastructure.persistence import (
     DatabaseDecisionControl,
     DailyAiRequestQuota,
@@ -18,7 +19,7 @@ from .processing.steps.email.get_email import GetEmail
 from .processing.steps.rules.detect_ndr import DetectNdr
 from .processing.steps.rules.detect_configured_filters import DetectConfiguredFilters
 from .processing.steps.email.prepare_data import PrepareData
-from .processing.steps.limits.validate_ai_request import ValidateAiRequest
+from .processing.steps.limits.load_destinations import LoadDestinations
 from .processing.steps.limits.acquire_ai_request_permit import AcquireAiRequestPermit
 from .processing.worker import JobWorker
 
@@ -34,35 +35,30 @@ def build_ai_agent(settings: Settings) -> AiAgent:
 def build_worker(settings: Settings) -> JobWorker:
     sessions = create_session_factory(settings.database_url)
     destinations = DestinationRepository(sessions)
-    active_destinations = destinations.active_for_account(settings.mailbox_account_id)
-    if not active_destinations:
-        raise ValueError(
-            "No active destinations configured for MAILBOX_ACCOUNT_ID="
-            f"{settings.mailbox_account_id!r}; initialize destinations with mail-destination-setup sync"
-        )
     jobs = JobStore(sessions, settings.worker_id)
     agent = build_ai_agent(settings)
     classifier = ClassificationService(agent, ClassificationPromptBuilder())
-    acquire_ai_request_permit = AcquireAiRequestPermit(
-        quota=DailyAiRequestQuota(sessions, settings.ai_daily_request_limit),
-        provider=settings.ai_provider,
-    )
+    steps = [
+        GetEmail(EmailRecordReader(sessions)),
+        LoadDestinations(destinations),
+        DetectConfiguredFilters(),
+        DetectNdr(),
+        PrepareData(settings.ai_max_body_characters),
+        AcquireAiRequestPermit(
+            quota=DailyAiRequestQuota(sessions, settings.ai_daily_request_limit),
+            provider=settings.ai_provider,
+        ),
+        ClassifyByBody(
+            classifier=classifier,
+            confidence_threshold=settings.ai_confidence_threshold,
+        ),
+    ]
     process = EmailClassificationProcess(
-        steps=[
-            GetEmail(EmailRecordReader(sessions)),
-            DetectConfiguredFilters(),
-            DetectNdr(destinations),
-            PrepareData(settings.ai_max_body_characters),
-            ValidateAiRequest(destinations),
-            acquire_ai_request_permit,
-            ClassifyByBody(
-                classifier=classifier,
-                confidence_threshold=settings.ai_confidence_threshold,
-            ),
-        ],
+        steps=steps,
         results=jobs,
         diagnostics=DatabaseDiagnosticStore(sessions),
         failure_handler=jobs,
+        workflow=LangGraphWorkflow(steps),
     )
     return JobWorker(
         process=process,

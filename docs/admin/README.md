@@ -42,10 +42,10 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 контейнеры из корня репозитория:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml up --build -d postgres mail-admin
+docker compose --env-file .env -f infra/compose.yaml up --build -d postgres dashboard
 ```
 
-При старте `mail-admin` сам проверит и применит ожидающие миграции до запуска API.
+При старте `dashboard` сам проверит и применит ожидающие миграции до запуска API.
 Отдельный контейнер `migrate` не создаётся.
 
 После запуска откройте `http://localhost:8082` и войдите с данными из `.env`.
@@ -58,13 +58,13 @@ docker compose --env-file .env -f infra/compose.yaml ps
 Посмотреть логи админки:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml logs -f mail-admin
+docker compose --env-file .env -f infra/compose.yaml logs -f dashboard
 ```
 
 Остановить эти контейнеры, сохранив данные базы:
 
 ```sh
-docker compose --env-file .env -f infra/compose.yaml stop mail-admin postgres
+docker compose --env-file .env -f infra/compose.yaml stop dashboard postgres
 ```
 
 Compose привязывает порт админки к loopback сервера. Для доступа к серверу
@@ -110,7 +110,7 @@ uv run python -m alembic -c packages/database/alembic.ini upgrade head
 Из корня репозитория выполните один раз:
 
 ```sh
-npm --prefix apps/mail-admin/web install
+npm --prefix apps/dashboard/web install
 ```
 
 ### 4. Запустите API и frontend
@@ -118,13 +118,13 @@ npm --prefix apps/mail-admin/web install
 Оставьте API работающим в первом терминале:
 
 ```sh
-uv run mail-admin-api
+uv run dashboard-api
 ```
 
 Из корня репозитория запустите frontend во втором терминале:
 
 ```sh
-npm run admin
+npm run dashboard
 ```
 
 Перейдите на `http://localhost:5173`. Vite перенаправляет `/api` запросы к API на

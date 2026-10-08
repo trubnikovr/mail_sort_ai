@@ -15,13 +15,13 @@ from .auth import LoginRateLimiter, router as auth_router
 from .routes import dashboard, destinations, jobs, logs, services, settings as settings_routes
 from .settings import Settings
 
-logger = logging.getLogger("mail_admin")
+logger = logging.getLogger("dashboard")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_environment()
     app = FastAPI(
-        title="Mail Sort Admin API",
+        title="Mail Sort Dashboard API",
         version="0.1.0",
         description="Operational dashboard and message review API for Mail Sort.",
     )
@@ -51,7 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     default_web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
-    web_dist = Path(getenv("MAIL_ADMIN_WEB_DIST", str(default_web_dist)))
+    web_dist = Path(getenv("DASHBOARD_WEB_DIST", str(default_web_dist)))
     if web_dist.is_dir():
         assets = web_dist / "assets"
         if assets.is_dir():
@@ -67,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def run() -> None:
     settings = Settings.from_environment()
-    configure_logging("mail-admin")
+    configure_logging("dashboard")
     uvicorn.run(app, host=settings.host, port=settings.port)
 
 

@@ -8,7 +8,7 @@ discovery.relabel "mail_sort" {
 
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    regex         = "mail-app|mail-alerts|mail-health|mail-admin"
+    regex         = "mail-app|alert-dispatcher|health-monitor|dashboard"
     action        = "keep"
   }
 

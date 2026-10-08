@@ -5,13 +5,8 @@ from pathlib import Path
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    mailbox_provider: str
     mailbox_account_id: str
     database_url: str
-    imap_host: str | None = None
-    imap_port: int = 993
-    imap_username: str | None = None
-    imap_app_password: str | None = None
     ews_endpoint: str | None = None
     ews_username: str | None = None
     ews_password: str | None = None
@@ -19,26 +14,16 @@ class Settings:
     @classmethod
     def from_environment(cls) -> "Settings":
         cls._load_local_env()
-        provider = getenv("MAILBOX_PROVIDER", "imap").strip().lower()
-        if provider not in {"imap", "ews"}:
-            raise ValueError("MAILBOX_PROVIDER must be either 'imap' or 'ews'")
         settings = cls(
-            mailbox_provider=provider,
             mailbox_account_id=cls._required("MAILBOX_ACCOUNT_ID"),
             database_url=cls._required("DATABASE_URL"),
-            imap_host=cls._optional("IMAP_HOST"),
-            imap_port=cls._positive_int("IMAP_PORT", 993),
-            imap_username=cls._optional("IMAP_USERNAME"),
-            imap_app_password=cls._optional("IMAP_APP_PASSWORD"),
             ews_endpoint=cls._optional("EWS_ENDPOINT"),
             ews_username=cls._optional("EWS_USERNAME"),
             ews_password=cls._optional("EWS_PASSWORD"),
         )
-        credentials = ((settings.imap_host, settings.imap_username, settings.imap_app_password)
-                       if provider == "imap" else
-                       (settings.ews_endpoint, settings.ews_username, settings.ews_password))
+        credentials = (settings.ews_endpoint, settings.ews_username, settings.ews_password)
         if any(not value for value in credentials):
-            raise ValueError(f"{provider.upper()} connection settings are required")
+            raise ValueError("EWS connection settings are required")
         return settings
 
     @staticmethod
@@ -51,13 +36,6 @@ class Settings:
     @staticmethod
     def _optional(name: str) -> str | None:
         return getenv(name, "").strip() or None
-
-    @staticmethod
-    def _positive_int(name: str, default: int) -> int:
-        value = int(getenv(name, str(default)).strip())
-        if value <= 0:
-            raise ValueError(f"{name} must be positive")
-        return value
 
     @staticmethod
     def _load_local_env() -> None:

@@ -11,9 +11,9 @@ dependencies = [
   "mail-collector",
   "mail-decision",
   "mail-router",
-  "mail-alerts",
-  "mail-health",
-  "mail-admin-api",
+  "alert-dispatcher",
+  "health-monitor",
+  "dashboard-api",
   "mail-destination-setup",
   "mail-database-reset",
   "mail-job-inspect",
@@ -30,9 +30,9 @@ mail-sort-alerts = { workspace = true }
 mail-collector = { workspace = true }
 mail-decision = { workspace = true }
 mail-router = { workspace = true }
-mail-alerts = { workspace = true }
-mail-health = { workspace = true }
-mail-admin-api = { workspace = true }
+alert-dispatcher = { workspace = true }
+health-monitor = { workspace = true }
+dashboard-api = { workspace = true }
 mail-destination-setup = { workspace = true }
 mail-database-reset = { workspace = true }
 mail-job-inspect = { workspace = true }
@@ -40,11 +40,11 @@ mail-job-inspect = { workspace = true }
 [tool.uv.workspace]
 members = [
   "packages/*",
-  "apps/mail-alerts",
+  "apps/alert-dispatcher",
   "apps/mail-collector",
   "apps/mail-decision",
-  "apps/mail-health",
+  "apps/health-monitor",
   "apps/mail-router",
-  "apps/mail-admin/api",
+  "apps/dashboard/api",
   "tools/*",
 ]

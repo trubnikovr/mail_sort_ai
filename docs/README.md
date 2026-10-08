@@ -52,9 +52,17 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 docker compose --env-file .env -f infra/compose.yaml up --build --remove-orphans -d
 ```
 
-Compose поднимет PostgreSQL, применит миграции при старте `mail-admin` и запустит
-обработчики, админку и health endpoint. При первом запуске Docker соберёт образы,
+Compose поднимет PostgreSQL, применит миграции при старте `dashboard` и запустит
+обработчики почты, dashboard, health-monitor и alert-dispatcher. При первом запуске Docker соберёт образы,
 поэтому команда может занять несколько минут.
+
+Всегда передавайте `--env-file .env`: `env_file` в `compose.yaml` загружает
+переменные внутрь контейнера, а `--env-file` задаёт значения для подстановок
+`${...}` в самом Compose-файле. Без него Compose может использовать пароль БД по
+умолчанию, и `dashboard` завершится с `password authentication failed`. Внутри
+Compose-сети база доступна по имени `postgres`; `localhost` в `DATABASE_URL`
+предназначен для локальных инструментов на хосте. Подробности и команды проверки
+см. в [руководстве Docker Compose](../infra/README.md).
 
 Проверьте состояние контейнеров:
 
@@ -117,15 +125,15 @@ uv sync
 В первом терминале запустите API:
 
 ```sh
-uv run mail-admin-api
+uv run dashboard-api
 ```
 
 Во втором терминале из корня установите frontend-зависимости (один раз) и
 запустите Vite:
 
 ```sh
-npm --prefix apps/mail-admin/web install
-npm run admin
+npm --prefix apps/dashboard/web install
+npm run dashboard
 ```
 
 Откройте `http://localhost:5173`. Vite перенаправляет `/api` запросы к API на
@@ -143,14 +151,14 @@ mail-collector ──► PostgreSQL ──► mail-decision ──► AI
                          └────────► mail-router ──► папка назначения
                            ▲
                            │ read-only admin API
-                    mail-admin (React SPA)
+                    dashboard (React SPA)
 ```
 
 - `mail-collector` обнаруживает сообщения и создаёт задачи классификации.
 - `mail-decision` выбирает активное назначение, записывает аудит и публикует
   задачу маршрутизации.
 - `mail-router` применяет маршрут через адаптер почты.
-- `mail-admin` показывает операционные данные и управляет паузой Decision.
+- `dashboard` показывает операционные данные и управляет паузой Decision.
 
 PostgreSQL является источником истины для очереди и аудита. Повторная доставка
 задачи безопасна, а письма не удаляются. Подробнее — в

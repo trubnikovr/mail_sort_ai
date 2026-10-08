@@ -6,7 +6,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, headers, credentials: 'same-origin' })
   if (!response.ok) {
     if (response.status === 401 && !path.endsWith('/auth/login') && !path.endsWith('/auth/me')) {
-      window.dispatchEvent(new Event('mail-admin:unauthorized'))
+      window.dispatchEvent(new Event('dashboard:unauthorized'))
     }
     const payload = await response.json().catch(() => null) as { detail?: string } | null
     throw new Error(`${response.status}:${payload?.detail || response.statusText || 'Request failed'}`)

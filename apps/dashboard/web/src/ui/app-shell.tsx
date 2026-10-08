@@ -27,9 +27,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   })
   const logout = useMutation({
     mutationFn: api.logout,
-    onSettled: () => {
+    onSuccess: () => {
       queryClient.clear()
-      queryClient.setQueryData(['auth'], { authenticated: false })
+      window.location.assign('/')
     },
   })
   const active = location.pathname.startsWith('/mail') ? '/mail'
@@ -64,8 +64,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="mt-auto p-4">
         <button onClick={() => logout.mutate()} disabled={logout.isPending} className="mt-4 flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-slate-50 disabled:opacity-60">
           <span className="flex size-9 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand">{auth.data?.username?.slice(0, 2).toUpperCase() || 'AD'}</span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold">{auth.data?.username || 'Администратор'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-400">Завершить сеанс</span></span><LogOut className="size-4 text-slate-400" />
+          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold">{auth.data?.username || 'Администратор'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-400">{logout.isPending ? 'Завершаем сеанс…' : 'Завершить сеанс'}</span></span><LogOut className="size-4 text-slate-400" />
         </button>
+        {logout.isError && <p role="alert" className="mt-2 px-2 text-[10px] text-rose-600">Не удалось завершить сеанс: {logout.error.message}</p>}
       </div>
     </aside>
 

@@ -1,14 +1,10 @@
 from mail_decision.processing.context import ProcessingContext, ProcessingOutcome
-from mail_decision.processing.ports import DestinationRepository
 
 from ..interface import ProcessingStep
 
 
 class DetectNdr(ProcessingStep):
     """Resolve explicit provider delivery-failure reports before spending AI quota."""
-
-    def __init__(self, destinations: DestinationRepository) -> None:
-        self._destinations = destinations
 
     def execute(self, context: ProcessingContext) -> None:
         if context.email is None:
@@ -21,8 +17,7 @@ class DetectNdr(ProcessingStep):
         ) or "failed" in {action.strip().lower() for action in actions}
         if not is_ndr:
             return
-        destinations = self._destinations.active_for_account(context.job.account_id)
-        if "ndr" not in destinations:
+        if "ndr" not in context.destinations:
             raise ValueError("Active NDR destination 'ndr' is not configured")
         context.outcome = ProcessingOutcome(
             status="completed",

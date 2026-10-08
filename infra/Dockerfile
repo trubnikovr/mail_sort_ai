@@ -14,8 +14,8 @@ COPY packages/alerts ./packages/alerts
 COPY apps/mail-collector ./apps/mail-collector
 COPY apps/mail-decision ./apps/mail-decision
 COPY apps/mail-router ./apps/mail-router
-COPY apps/mail-alerts ./apps/mail-alerts
-COPY apps/mail-health ./apps/mail-health
+COPY apps/alert-dispatcher ./apps/alert-dispatcher
+COPY apps/health-monitor ./apps/health-monitor
 COPY tools/mail-destination-setup ./tools/mail-destination-setup
 
 RUN pip install --no-cache-dir \

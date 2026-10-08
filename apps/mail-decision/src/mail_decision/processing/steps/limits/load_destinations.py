@@ -8,8 +8,8 @@ from ..interface import ProcessingStep
 logger = logging.getLogger(__name__)
 
 
-class ValidateAiRequest(ProcessingStep):
-    """Check configured destinations without writing to persistence."""
+class LoadDestinations(ProcessingStep):
+    """Load the active destinations used by the remaining processing steps."""
 
     def __init__(self, destinations: DestinationRepository) -> None:
         self._destinations = destinations

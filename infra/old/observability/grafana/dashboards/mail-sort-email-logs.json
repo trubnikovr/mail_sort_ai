@@ -30,7 +30,7 @@
       "datasource": { "type": "loki", "uid": "mail-sort-loki" },
       "targets": [
         {
-          "expr": "{service=~\"mail-app|mail-alerts|mail-health|mail-admin\"} |= \"${email_search}\"",
+          "expr": "{service=~\"mail-app|alert-dispatcher|health-monitor|dashboard\"} |= \"${email_search}\"",
           "refId": "A"
         }
       ],

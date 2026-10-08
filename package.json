@@ -2,7 +2,7 @@
   "name": "mail-sort",
   "private": true,
   "scripts": {
-    "admin": "npm --prefix apps/mail-admin/web run dev",
-    "admin:build": "npm --prefix apps/mail-admin/web run build"
+    "dashboard": "npm --prefix apps/dashboard/web run dev",
+    "dashboard:build": "npm --prefix apps/dashboard/web run build"
   }
 }

@@ -77,7 +77,7 @@ class AlertDeliveryWorker:
             request = Request(
                 self._prtg_push_url,
                 data=_prtg_payload(alert),
-                headers={"Content-Type": "application/xml", "User-Agent": "mail-sort-alerts/0.1"},
+                headers={"Content-Type": "application/xml", "User-Agent": "mail-sort-alert-dispatcher/0.1"},
                 method="POST",
             )
             with urlopen(request, timeout=10) as response:
@@ -117,7 +117,7 @@ class AlertDeliveryWorker:
 
 
 def main() -> None:
-    configure_logging("mail-alerts")
+    configure_logging("alert-dispatcher")
     load_local_env()
     database_url = getenv("DATABASE_URL", "").strip()
     prtg_push_url = getenv("PRTG_PUSH_URL", "").strip()

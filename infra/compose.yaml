@@ -35,7 +35,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
     depends_on:
-      mail-admin:
+      dashboard:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health/services', timeout=2)"]
@@ -47,31 +47,31 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
-  mail-alerts:
+  alert-dispatcher:
     build:
       context: ..
       dockerfile: infra/Dockerfile
       args:
-        SERVICE: mail-alerts
+        SERVICE: alert-dispatcher
       network: host
-    command: ["python", "-m", "mail_alerts.main"]
+    command: ["python", "-m", "alert_dispatcher.main"]
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
     depends_on:
-      mail-admin:
+      dashboard:
         condition: service_healthy
     logging: *default-logging
     restart: unless-stopped
 
-  mail-health:
+  health-monitor:
     build:
       context: ..
       dockerfile: infra/Dockerfile
       args:
-        SERVICE: mail-health
+        SERVICE: health-monitor
       network: host
-    command: ["python", "-m", "mail_health.main"]
+    command: ["python", "-m", "health_monitor.main"]
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mail_sort}
@@ -81,7 +81,7 @@ services:
     ports:
       - "${HEALTH_PORT:-8080}:8080"
     depends_on:
-      mail-admin:
+      dashboard:
         condition: service_healthy
       mail-app:
         condition: service_started
@@ -93,10 +93,10 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
-  mail-admin:
+  dashboard:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.admin
+      dockerfile: infra/Dockerfile.dashboard
       network: host
     env_file: ../.env
     environment:

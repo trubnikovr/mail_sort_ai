@@ -13,8 +13,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
       queryClient.clear()
       queryClient.setQueryData(['auth'], { authenticated: false })
     }
-    window.addEventListener('mail-admin:unauthorized', onUnauthorized)
-    return () => window.removeEventListener('mail-admin:unauthorized', onUnauthorized)
+    window.addEventListener('dashboard:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('dashboard:unauthorized', onUnauthorized)
   }, [queryClient])
 
   if (auth.isPending) {
