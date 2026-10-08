@@ -3,7 +3,7 @@ from collections.abc import Iterable
 
 from mail_sort_contracts import MailProvider
 
-from .tasks import ClaimedRouteJob
+from .tasks import ClaimedRouteJob, MailboxConnection
 
 
 class MailboxAction(ABC):
@@ -15,6 +15,12 @@ class MailboxAction(ABC):
 class DestinationMailboxLookup(ABC):
     @abstractmethod
     def mailbox_for(self, account_id: str, destination_id: str) -> str:
+        raise NotImplementedError
+
+
+class MailboxConnectionLookup(ABC):
+    @abstractmethod
+    def connection_for(self, account_id: str) -> MailboxConnection:
         raise NotImplementedError
 
 

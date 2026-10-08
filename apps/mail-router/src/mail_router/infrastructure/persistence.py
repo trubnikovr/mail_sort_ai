@@ -9,11 +9,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mail_sort_contracts import MailProvider, RouteEmailJob
 from mail_sort_database.models import Alert, Destination, EmailRecord, Job
+from mail_sort_database.models import MailboxAccount
+from mail_sort_database.credentials import decrypt_credential
 from mail_sort_database.session import session_scope
 
-from mail_router.routing.registry import DestinationMailboxLookup
+from mail_router.routing.registry import DestinationMailboxLookup, MailboxConnectionLookup
 from mail_router.routing.worker import MailboxActionClaimer
-from mail_router.routing.tasks import ClaimedRouteJob
+from mail_router.routing.tasks import ClaimedRouteJob, MailboxConnection
 
 
 logger = logging.getLogger(__name__)
@@ -31,12 +33,19 @@ class RouteJobStore(MailboxActionClaimer):
         statement = (
             select(Job, EmailRecord.subject)
             .join(EmailRecord, Job.email_record_id == EmailRecord.id)
+            .join(MailboxAccount, MailboxAccount.id == Job.account_id)
             .where(
                 Job.type == "route_email",
                 Job.status == "pending",
                 Job.retry_at <= now,
                 Job.attempts < Job.max_attempts,
                 Job.email_record_id.is_not(None),
+                MailboxAccount.is_active.is_(True),
+                MailboxAccount.provider == Job.provider,
+                MailboxAccount.email_address != "",
+                MailboxAccount.host != "",
+                MailboxAccount.username != "",
+                MailboxAccount.encrypted_password.is_not(None),
             )
             .order_by(Job.created_at)
             .limit(1)
@@ -193,3 +202,24 @@ class DestinationRepository(DestinationMailboxLookup):
         if mailbox is None:
             raise LookupError(f"Active destination {destination_id!r} was not found")
         return mailbox
+
+
+class MailboxAccountRepository(MailboxConnectionLookup):
+    def __init__(self, sessions: sessionmaker[Session]) -> None:
+        self._sessions = sessions
+
+    def connection_for(self, account_id: str) -> MailboxConnection:
+        with session_scope(self._sessions) as session:
+            account = session.get(MailboxAccount, account_id)
+            if account is None or not account.is_active or not account.is_configured:
+                raise LookupError(f"Active configured mailbox account {account_id!r} was not found")
+            return MailboxConnection(
+                id=account.id,
+                provider=account.provider or "",
+                email_address=account.email_address,
+                source_mailbox=account.source_mailbox,
+                host=account.host,
+                port=account.port,
+                username=account.username,
+                password=decrypt_credential(account.encrypted_password),
+            )

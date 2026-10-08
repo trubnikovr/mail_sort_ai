@@ -9,16 +9,19 @@ from .port import MailboxSource
 class EwsMailboxSource(MailboxSource):
     """On-premises EWS source backed by exchangelib and NTLM."""
 
-    def __init__(self, endpoint: str, username: str, password: str) -> None:
+    def __init__(self, endpoint: str = "", username: str = "", password: str = "") -> None:
         self._endpoint = endpoint
         self._credentials = Credentials(username=username, password=password)
 
     def collect(self, account: MailboxAccount) -> SyncPage:
         mailbox = Account(
-            primary_smtp_address=self._credentials.username,
+            primary_smtp_address=account.email_address or self._credentials.username,
             config=Configuration(
-                service_endpoint=self._endpoint,
-                credentials=self._credentials,
+                service_endpoint=account.host or self._endpoint,
+                credentials=Credentials(
+                    username=account.username or self._credentials.username,
+                    password=account.password or self._credentials.password,
+                ),
                 auth_type=NTLM,
             ),
             autodiscover=False,

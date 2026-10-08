@@ -11,7 +11,7 @@ from .port import MailboxSource
 class ImapMailboxSource(MailboxSource):
     """Reads unread messages from the configured IMAP folder."""
 
-    def __init__(self, host: str, port: int, username: str, password: str) -> None:
+    def __init__(self, host: str = "", port: int = 993, username: str = "", password: str = "") -> None:
         self._host = host
         self._port = port
         self._username = username
@@ -19,11 +19,11 @@ class ImapMailboxSource(MailboxSource):
 
     def collect(self, account: MailboxAccount) -> SyncPage:
         session = imaplib.IMAP4_SSL(
-            host=self._host,
-            port=self._port,
+            host=account.host or self._host,
+            port=account.port or self._port,
             ssl_context=ssl.create_default_context(),
         )
-        status, _ = session.login(self._username, self._password)
+        status, _ = session.login(account.username or self._username, account.password or self._password)
         if status != "OK":
             session.logout()
             raise RuntimeError("IMAP authentication failed")

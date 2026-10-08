@@ -13,7 +13,7 @@ def main() -> None:
     arguments = parser.parse_args()
     configure_logging()
     settings = Settings.from_environment()
-    logger.info("router starting: worker_id=%s provider=%s mode=%s", settings.worker_id, settings.mailbox_provider, "once" if arguments.once else "continuous")
+    logger.info("router starting: worker_id=%s mode=%s", settings.worker_id, "once" if arguments.once else "continuous")
     worker = build_worker(settings)
     if arguments.once:
         worker.run_once()

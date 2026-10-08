@@ -49,6 +49,20 @@ export interface Destination {
   use_for_ai: boolean
 }
 
+export interface MailboxAccount {
+  id: string
+  name: string
+  provider: 'imap' | 'ews' | null
+  email_address: string
+  source_mailbox: string
+  host: string
+  port: number
+  username: string
+  is_active: boolean
+  is_configured: boolean
+  has_password: boolean
+}
+
 export interface Page<T> {
   items: T[]
   limit: number

@@ -1,9 +1,13 @@
+import logging
+
 from mail_sort_contracts import ClassifyEmailJob
 
 from mail_collector.mailboxes.models import MailboxAccount
 from mail_collector.mailboxes.registry import MailboxSourceRegistry
 
-from .ports import EmailJobPublisherPort, EmailRecordStorePort
+from .ports import EmailJobPublisherPort, EmailRecordStorePort, MailboxAccountReaderPort
+
+logger = logging.getLogger(__name__)
 
 
 class MailboxSynchronizationService:
@@ -14,10 +18,36 @@ class MailboxSynchronizationService:
         mail_sources: MailboxSourceRegistry,
         job_publisher: EmailJobPublisherPort,
         email_records: EmailRecordStorePort,
+        accounts: MailboxAccountReaderPort | None = None,
     ) -> None:
         self._mail_sources = mail_sources
         self._job_publisher = job_publisher
         self._email_records = email_records
+        self._accounts = accounts
+
+    def synchronize_active_accounts(self) -> int:
+        if self._accounts is None:
+            raise RuntimeError("Mailbox account repository is not configured")
+        total = 0
+        accounts = self._accounts.active_configured()
+        failures: list[Exception] = []
+        for account in accounts:
+            try:
+                count = self.synchronize(account)
+                total += count
+                logger.info(
+                    "mailbox synchronization completed: account_id=%s discovered=%s",
+                    account.id,
+                    count,
+                )
+            except Exception as error:
+                failures.append(error)
+                logger.exception("mailbox synchronization failed: account_id=%s", account.id)
+        if not accounts:
+            logger.info("no active configured mailbox accounts")
+        if failures:
+            raise RuntimeError(f"Mailbox synchronization failed for {len(failures)} account(s)") from failures[0]
+        return total
 
     def synchronize(self, account: MailboxAccount) -> int:
         source = self._mail_sources.for_account(account)

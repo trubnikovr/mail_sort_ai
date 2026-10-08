@@ -1,19 +1,54 @@
+import logging
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, exists, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from mail_sort_contracts import ClassifyEmailJob
-from mail_sort_database.models import EmailRecord, Job
+from mail_sort_contracts import ClassifyEmailJob, MailProvider
+from mail_sort_database.credentials import decrypt_credential
+from mail_sort_database.models import EmailRecord, Job, MailboxAccount as MailboxAccountRecord
 from mail_sort_database.session import session_scope
 
 from mail_collector.mailboxes.models import DiscoveredMessage, MailboxAccount
 from mail_collector.synchronization.ports import (
     EmailJobPublisherPort,
     EmailRecordStorePort,
+    MailboxAccountReaderPort,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class MailboxAccountRepository(MailboxAccountReaderPort):
+    def __init__(self, sessions: sessionmaker[Session]) -> None:
+        self._sessions = sessions
+
+    def active_configured(self) -> list[MailboxAccount]:
+        with session_scope(self._sessions) as session:
+            records = session.scalars(
+                select(MailboxAccountRecord)
+                .where(MailboxAccountRecord.is_active.is_(True))
+                .order_by(MailboxAccountRecord.id)
+            ).all()
+            accounts: list[MailboxAccount] = []
+            for record in records:
+                if not record.is_configured:
+                    logger.warning("active mailbox account is incomplete: account_id=%s", record.id)
+                    continue
+                accounts.append(MailboxAccount(
+                    id=record.id,
+                    provider=cast(MailProvider, record.provider),
+                    mailbox=record.source_mailbox,
+                    email_address=record.email_address,
+                    host=record.host,
+                    port=record.port,
+                    username=record.username,
+                    password=decrypt_credential(record.encrypted_password),
+                ))
+            return accounts
 
 
 class EmailJobPublisher(EmailJobPublisherPort):

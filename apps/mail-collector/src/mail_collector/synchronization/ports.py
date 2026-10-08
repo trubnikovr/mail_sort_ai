@@ -20,3 +20,9 @@ class EmailRecordStorePort(ABC):
     @abstractmethod
     def delete_expired(self) -> int:
         raise NotImplementedError
+
+
+class MailboxAccountReaderPort(ABC):
+    @abstractmethod
+    def active_configured(self) -> list[MailboxAccount]:
+        raise NotImplementedError

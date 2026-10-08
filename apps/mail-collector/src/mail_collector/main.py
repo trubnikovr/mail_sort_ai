@@ -3,7 +3,6 @@ import logging
 from time import sleep
 
 from mail_collector.bootstrap import build_synchronization_service
-from mail_collector.mailboxes.models import MailboxAccount
 from mail_collector.infrastructure.settings import Settings
 from mail_collector.infrastructure.logging_config import configure_logging
 from mail_collector.synchronization.service import MailboxSynchronizationService
@@ -12,13 +11,8 @@ from mail_collector.synchronization.service import MailboxSynchronizationService
 logger = logging.getLogger(__name__)
 
 
-def synchronize_once(service: MailboxSynchronizationService, settings: Settings) -> int:
-    account = MailboxAccount(
-        id=settings.mailbox_account_id,
-        provider=settings.mailbox_provider,
-        mailbox=settings.mailbox_source,
-    )
-    return service.synchronize(account)
+def synchronize_once(service: MailboxSynchronizationService) -> int:
+    return service.synchronize_active_accounts()
 
 
 def main() -> None:
@@ -32,7 +26,7 @@ def main() -> None:
 
     while True:
         try:
-            count = synchronize_once(service, settings)
+            count = synchronize_once(service)
             logger.info("mailbox synchronization completed: discovered=%s", count)
         except Exception:
             logger.exception("mailbox synchronization failed")

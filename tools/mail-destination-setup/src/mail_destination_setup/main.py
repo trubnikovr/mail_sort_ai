@@ -9,6 +9,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="mail-destination-setup")
     commands = parser.add_subparsers(dest="command", required=True)
     add = commands.add_parser("add", help="Create an EWS folder and register a database destination")
+    add.add_argument("--account-id", required=True, help="Configured mailbox account ID from Dashboard")
     add.add_argument("--id", required=True, help="Stable ID used by classification")
     add.add_argument("--name", required=True, help="Human-readable destination name")
     add.add_argument("--mailbox", required=True, help="Folder path, e.g. Mail Sort/Sales")
@@ -19,6 +20,7 @@ def main() -> None:
     settings = Settings.from_environment()
     add_destination(
         settings,
+        account_id=arguments.account_id,
         destination_id=arguments.id,
         name=arguments.name,
         mailbox=arguments.mailbox,

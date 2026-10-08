@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from mail_sort_database.models import Destination, Job
+from mail_sort_database.models import Destination, Job, MailboxAccount
 
 from ..auth import require_admin
 from ..dependencies import get_session
@@ -53,6 +53,8 @@ def create_destination(
     payload: DestinationInput,
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    if session.get(MailboxAccount, payload.account_id) is None:
+        raise HTTPException(status_code=422, detail="Select an existing mailbox account")
     destination = Destination(**payload.model_dump())
     session.add(destination)
     try:
@@ -75,6 +77,8 @@ def update_destination(
         raise HTTPException(status_code=404, detail="Destination not found")
     if payload.id != destination_id:
         raise HTTPException(status_code=422, detail="Destination ID cannot be changed")
+    if session.get(MailboxAccount, payload.account_id) is None:
+        raise HTTPException(status_code=422, detail="Select an existing mailbox account")
     for key, value in payload.model_dump(exclude={"id"}).items():
         setattr(destination, key, value)
     try:

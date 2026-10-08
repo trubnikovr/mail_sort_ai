@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from mail_sort_contracts import MailProvider
@@ -9,6 +9,11 @@ class MailboxAccount:
     id: str
     provider: MailProvider
     mailbox: str = "INBOX"
+    email_address: str = ""
+    host: str = ""
+    port: int = 993
+    username: str = ""
+    password: str = field(default="", repr=False)
 
 
 @dataclass(frozen=True, slots=True)

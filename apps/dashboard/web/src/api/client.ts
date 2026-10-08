@@ -1,4 +1,4 @@
-import type { AuthStatus, DashboardSummary, DecisionSetting, Destination, JobDetail, JobSummary, LogPage, Page, ServicesHealth, SystemLogPage } from '../types'
+import type { AuthStatus, DashboardSummary, DecisionSetting, Destination, JobDetail, JobSummary, LogPage, MailboxAccount, Page, ServicesHealth, SystemLogPage } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
@@ -46,6 +46,14 @@ export const api = {
     body: JSON.stringify({ value }),
   }),
   destinations: () => request<Destination[]>('/api/destinations'),
+  mailboxAccounts: () => request<MailboxAccount[]>('/api/mailbox-accounts'),
+  createMailboxAccount: (account: Record<string, unknown>) => request<MailboxAccount>('/api/mailbox-accounts', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(account),
+  }),
+  updateMailboxAccount: (id: string, account: Record<string, unknown>) => request<MailboxAccount>(`/api/mailbox-accounts/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(account),
+  }),
+  deleteMailboxAccount: (id: string) => request<void>(`/api/mailbox-accounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   createDestination: (destination: Omit<Destination, 'id'> & { id: string }) => request<Destination>('/api/destinations', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(destination),
   }),

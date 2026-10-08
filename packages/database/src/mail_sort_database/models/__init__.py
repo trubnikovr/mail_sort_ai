@@ -8,6 +8,7 @@ from .job import Job
 from .alert import Alert
 from .app_setting import AppSetting
 from .system_log import SystemLog
+from .mailbox_account import MailboxAccount
 
 __all__ = [
     "AiRequest",
@@ -21,4 +22,5 @@ __all__ = [
     "Alert",
     "AppSetting",
     "SystemLog",
+    "MailboxAccount",
 ]

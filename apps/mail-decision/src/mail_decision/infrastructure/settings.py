@@ -9,7 +9,6 @@ SUPPORTED_AI_PROVIDERS = frozenset({"gemini", "openai"})
 @dataclass(frozen=True, slots=True)
 class Settings:
     database_url: str
-    mailbox_account_id: str
     ai_provider: str
     ai_model: str
     ai_api_key: str = field(repr=False)
@@ -21,6 +20,7 @@ class Settings:
     retry_delay_seconds: int
     stale_job_timeout_seconds: int
     worker_id: str
+    mailbox_account_id: str = ""
 
     def __post_init__(self) -> None:
         if self.ai_provider not in SUPPORTED_AI_PROVIDERS:
@@ -38,7 +38,6 @@ class Settings:
         model = cls._required("AI_MODEL")
         settings = cls(
             database_url=cls._required("DATABASE_URL"),
-            mailbox_account_id=cls._required("MAILBOX_ACCOUNT_ID"),
             ai_provider=provider,
             ai_model=model,
             ai_api_key=cls._required("AI_AGENT_API_KEY"),

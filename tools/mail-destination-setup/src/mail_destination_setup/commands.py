@@ -2,18 +2,35 @@ from exchangelib import Account, Configuration, Credentials, DELEGATE, Folder, N
 from exchangelib.errors import ErrorFolderNotFound
 from sqlalchemy.dialects.postgresql import insert
 
-from mail_sort_database.models import Destination
+from mail_sort_database.credentials import decrypt_credential
+from mail_sort_database.models import Destination, MailboxAccount
 from mail_sort_database.session import create_session_factory, session_scope
 
 from .settings import Settings
 
 
-def add_destination(settings: Settings, destination_id: str, name: str, mailbox: str, description: str) -> None:
-    credentials = Credentials(username=settings.ews_username, password=settings.ews_password)
+def add_destination(
+    settings: Settings,
+    account_id: str,
+    destination_id: str,
+    name: str,
+    mailbox: str,
+    description: str,
+) -> None:
+    sessions = create_session_factory(settings.database_url)
+    with sessions() as session:
+        account_settings = session.get(MailboxAccount, account_id)
+        if account_settings is None or account_settings.provider != "ews" or not account_settings.is_configured:
+            raise ValueError(f"Configured EWS mailbox account {account_id!r} was not found")
+        endpoint = account_settings.host
+        username = account_settings.username
+        password = decrypt_credential(account_settings.encrypted_password)
+        email_address = account_settings.email_address
+    credentials = Credentials(username=username, password=password)
     account = Account(
-        primary_smtp_address=settings.ews_username,
+        primary_smtp_address=email_address,
         config=Configuration(
-            service_endpoint=settings.ews_endpoint,
+            service_endpoint=endpoint,
             credentials=credentials,
             auth_type=NTLM,
         ),
@@ -24,7 +41,7 @@ def add_destination(settings: Settings, destination_id: str, name: str, mailbox:
 
     statement = insert(Destination).values(
         id=destination_id,
-        account_id=settings.mailbox_account_id,
+        account_id=account_id,
         name=name,
         description=description,
         instruction=description,
@@ -44,7 +61,7 @@ def add_destination(settings: Settings, destination_id: str, name: str, mailbox:
             "use_for_ai": statement.excluded.use_for_ai,
         },
     )
-    with session_scope(create_session_factory(settings.database_url)) as session:
+    with session_scope(sessions) as session:
         session.execute(statement)
 
 

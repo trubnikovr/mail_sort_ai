@@ -7,17 +7,19 @@ import { MailPage } from './pages/mail-page'
 import { LogsPage } from './pages/logs-page'
 import { SystemLogsPage } from './pages/system-logs-page'
 import { SettingsPage } from './pages/settings-page'
+import { MailboxAccountsPage } from './pages/mailbox-accounts-page'
 
 const rootRoute = createRootRoute({ component: () => <AppShell><Outlet /></AppShell> })
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: DashboardPage })
 const mailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/mail', component: MailPage })
 const jobDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/mail/$jobId', component: JobDetailPage })
 const destinationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/destinations', component: DestinationsPage })
+const mailboxAccountsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/mailbox-accounts', component: MailboxAccountsPage })
 const logsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/logs', component: LogsPage })
 const systemLogsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/system-logs', component: SystemLogsPage })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage })
 
-const routeTree = rootRoute.addChildren([dashboardRoute, mailRoute, jobDetailRoute, destinationsRoute, logsRoute, systemLogsRoute, settingsRoute])
+const routeTree = rootRoute.addChildren([dashboardRoute, mailRoute, jobDetailRoute, destinationsRoute, mailboxAccountsRoute, logsRoute, systemLogsRoute, settingsRoute])
 export const router = createRouter({ routeTree })
 
 declare module '@tanstack/react-router' {

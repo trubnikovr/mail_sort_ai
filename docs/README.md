@@ -28,7 +28,8 @@ cp .env.example .env
 
 Откройте `.env` и задайте как минимум:
 
-- `MAILBOX_PROVIDER` и параметры подключения к почте;
+- `MAILBOX_CREDENTIALS_KEY` для шифрования паролей почты; подключения добавляются
+  в Dashboard;
 - `AI_PROVIDER`, `AI_MODEL` и `AI_AGENT_API_KEY`;
 - `POSTGRES_PASSWORD` для базы данных;
 - `MAIL_ADMIN_USERNAME`, `MAIL_ADMIN_PASSWORD` и
@@ -150,7 +151,7 @@ mail-collector ──► PostgreSQL ──► mail-decision ──► AI
                          │               │
                          └────────► mail-router ──► папка назначения
                            ▲
-                           │ read-only admin API
+                           │ admin API
                     dashboard (React SPA)
 ```
 
@@ -158,7 +159,8 @@ mail-collector ──► PostgreSQL ──► mail-decision ──► AI
 - `mail-decision` выбирает активное назначение, записывает аудит и публикует
   задачу маршрутизации.
 - `mail-router` применяет маршрут через адаптер почты.
-- `dashboard` показывает операционные данные и управляет паузой Decision.
+- `dashboard` показывает операционные данные, управляет почтовыми аккаунтами,
+  папками и паузой Decision.
 
 PostgreSQL является источником истины для очереди и аудита. Повторная доставка
 задачи безопасна, а письма не удаляются. Подробнее — в

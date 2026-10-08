@@ -1,30 +1,23 @@
+from collections.abc import Callable
+
+from mail_sort_contracts import MailProvider
+
+from mail_router.routing.registry import MailboxAction, MailboxConnectionLookup, DestinationMailboxLookup
 from .ews_mailbox import EwsMoveToFolderAction
 from .imap_mailbox import ImapMoveToFolderAction
-from .persistence import DestinationRepository
-from .settings import Settings
 
 
 class MailboxActionFactory:
-    """Builds the provider adapter selected by configuration."""
+    """Build provider-specific actions that resolve credentials per job account."""
 
-    def __init__(self, settings: Settings, destinations: DestinationRepository) -> None:
-        self._settings = settings
-        self._destinations = destinations
+    def __init__(self, accounts: MailboxConnectionLookup, destinations: DestinationMailboxLookup) -> None:
+        self._builders: dict[MailProvider, Callable[[], MailboxAction]] = {
+            "imap": lambda: ImapMoveToFolderAction(accounts, destinations),
+            "ews": lambda: EwsMoveToFolderAction(accounts, destinations),
+        }
 
-    def resolve(self):
-        if self._settings.mailbox_provider == "imap":
-            return ImapMoveToFolderAction(
-                host=self._settings.imap_host or "",
-                port=self._settings.imap_port,
-                username=self._settings.imap_username or "",
-                app_password=self._settings.imap_app_password or "",
-                source_mailbox=self._settings.mailbox_source,
-                destinations=self._destinations,
-            )
-        return EwsMoveToFolderAction(
-            endpoint=self._settings.ews_endpoint or "",
-            username=self._settings.ews_username or "",
-            password=self._settings.ews_password or "",
-            source_mailbox=self._settings.mailbox_source,
-            destinations=self._destinations,
-        )
+    def resolve(self, provider: MailProvider) -> MailboxAction:
+        try:
+            return self._builders[provider]()
+        except KeyError as error:
+            raise ValueError(f"Unsupported mailbox provider: {provider}") from error

@@ -47,19 +47,20 @@ source .venv/bin/activate
 ```
 
 Создайте `.env` из шаблона, только если его ещё нет; существующий `.env` не
-перезаписывайте. Заполните настройки и выберите `MAILBOX_PROVIDER=imap` или
-`MAILBOX_PROVIDER=ews`; полный список параметров и примеры находятся в
-[`.env.example`](.env.example).
+перезаписывайте. Задайте `MAILBOX_CREDENTIALS_KEY` для шифрования почтовых
+паролей. Подключения настраиваются в Dashboard в разделе **Почтовые аккаунты**;
+папки привязываются к аккаунту через список выбора. Остальные переменные среды
+описаны в [`.env.example`](.env.example).
 
 ## Admin web
 
 Админка — SPA на React и TypeScript: Vite собирает клиент, TanStack Router
 управляет страницами, TanStack Query — запросами к API, TanStack Table — списками.
 FastAPI предоставляет JSON API и OpenAPI (`/docs`); production-контейнер отдаёт
-собранную статику и API с одного адреса. Первая версия позволяет смотреть
-сводку, искать письма, открывать тело и историю обработки, искать сохранённые в
-PostgreSQL события аудита/классификации, а также просматривать настройки папок;
-данные писем и назначения доступны только для просмотра. Технические логи сервисов
+собранную статику и API с одного адреса. Dashboard показывает сводку, письма,
+историю обработки, события аудита и технические логи; позволяет управлять
+почтовыми подключениями, папками и настройками классификации. Тела писем
+доступны только для просмотра. Технические логи сервисов
 сохраняются в PostgreSQL и доступны на отдельной странице админки; stdout можно
 посмотреть через `docker compose logs`. На странице настроек можно приостановить и возобновить
 Decision; флаг `mail_decision.enabled` хранится в таблице `app_settings`.
@@ -122,15 +123,16 @@ destination record together.
 ### `mail-destination-setup`
 
 ```text
-mail-destination-setup add --id ID --name NAME --mailbox PATH [--description TEXT]
+mail-destination-setup add --account-id ACCOUNT_ID --id ID --name NAME --mailbox PATH [--description TEXT]
 ```
 
-- `add` создаёт папку EWS и добавляет или обновляет назначение в БД. `--id`,
-  `--name` и `--mailbox` обязательны; `--description` задаёт описание и
+- `add` создаёт папку EWS и добавляет или обновляет назначение в БД. Аккаунт
+  предварительно настраивается в Dashboard. `--account-id`, `--id`, `--name` и
+  `--mailbox` обязательны; `--description` задаёт описание и
   инструкцию классификации.
 
-Для работы нужны переменные подключения из `.env`: `DATABASE_URL`,
-`MAILBOX_ACCOUNT_ID`, `EWS_ENDPOINT`, `EWS_USERNAME` и `EWS_PASSWORD`.
+Для работы нужны `DATABASE_URL` и `MAILBOX_CREDENTIALS_KEY` в `.env`; параметры
+подключения берутся из выбранного аккаунта в базе данных.
 
 ### `mail-database-reset`
 
@@ -157,12 +159,12 @@ mail-job-inspect JOB_UUID
 
 ## EWS destinations
 
-To create a destination folder in EWS and register it in PostgreSQL, configure
-`DATABASE_URL`, `MAILBOX_ACCOUNT_ID`, `EWS_ENDPOINT`, `EWS_USERNAME`, and
-`EWS_PASSWORD` in `.env`, then run:
+To create a destination folder in EWS and register it in PostgreSQL, configure a
+mailbox account in Dashboard, then run:
 
 ```bash
 mail-destination-setup add \
+  --account-id dolores-main \
   --id sales \
   --name "Продажи" \
   --mailbox "Mail Sort/Sales" \
