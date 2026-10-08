@@ -67,9 +67,18 @@ def get_job(job_id: UUID, session: Session = Depends(get_session)) -> dict[str, 
     if result is None:
         raise HTTPException(status_code=404, detail="Job not found")
     job, email = result
+    related_jobs = session.execute(
+        select(Job, EmailRecord)
+        .outerjoin(EmailRecord, Job.email_record_id == EmailRecord.id)
+        .where(Job.email_record_id == job.email_record_id)
+        .order_by(Job.created_at.desc())
+    ).all() if job.email_record_id is not None else [(job, email)]
+    related_job_ids = [related_job.id for related_job, _ in related_jobs]
     audit = session.scalars(
-        select(AuditLog).where(AuditLog.job_id == job.id).order_by(AuditLog.created_at)
-    ).all()
+        select(AuditLog)
+        .where(AuditLog.job_id.in_(related_job_ids))
+        .order_by(AuditLog.created_at)
+    ).all() if related_job_ids else []
     details = job_summary(job, email)
     if not details["destination_id"]:
         details["destination_id"] = next(
@@ -81,12 +90,6 @@ def get_job(job_id: UUID, session: Session = Depends(get_session)) -> dict[str, 
             None,
         )
     details["payload"] = job.payload
-    related_jobs = session.execute(
-        select(Job, EmailRecord)
-        .outerjoin(EmailRecord, Job.email_record_id == EmailRecord.id)
-        .where(Job.email_record_id == job.email_record_id)
-        .order_by(Job.created_at.desc())
-    ).all() if job.email_record_id is not None else [(job, email)]
     details["jobs"] = [job_summary(related_job, related_email) for related_job, related_email in related_jobs]
     details["email"] = None if email is None else {
         "subject": email.subject,

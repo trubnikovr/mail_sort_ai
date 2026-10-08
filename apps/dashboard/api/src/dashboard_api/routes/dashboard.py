@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from mail_sort_database.models import Alert, Destination, EmailRecord, Job
+from mail_sort_database.models import Alert, AuditLog, Destination, EmailRecord, Job
 
 from ..auth import require_admin
 from ..dependencies import get_session
@@ -27,6 +27,18 @@ def get_dashboard_summary(session: Session = Depends(get_session)) -> dict[str, 
         .order_by(Job.created_at.desc())
         .limit(8)
     ).all()
+    recent_job_ids = [job.id for job, _ in recent]
+    destination_by_job: dict[Any, str] = {}
+    if recent_job_ids:
+        audit_rows = session.execute(
+            select(AuditLog.job_id, AuditLog.details)
+            .where(AuditLog.job_id.in_(recent_job_ids))
+            .order_by(AuditLog.created_at.desc())
+        ).all()
+        for audit_job_id, details in audit_rows:
+            destination = details.get("destination_id")
+            if audit_job_id not in destination_by_job and isinstance(destination, str):
+                destination_by_job[audit_job_id] = destination
     return {
         "jobs": {
             "total": sum(counts.values()),
@@ -42,5 +54,8 @@ def get_dashboard_summary(session: Session = Depends(get_session)) -> dict[str, 
         "pending_alerts": session.scalar(
             select(func.count()).select_from(Alert).where(Alert.status == "pending")
         ) or 0,
-        "recent_jobs": [job_summary(job, email) for job, email in recent],
+        "recent_jobs": [
+            job_summary(job, email, destination_by_job.get(job.id))
+            for job, email in recent
+        ],
     }

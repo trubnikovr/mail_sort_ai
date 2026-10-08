@@ -2,13 +2,13 @@ from mail_sort_alerts import AlertEvent, AlertSeverity
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from mail_sort_contracts import MailProvider, RouteEmailJob
-from mail_sort_database.models import Alert, Destination, EmailRecord, Job
+from mail_sort_database.models import Alert, AuditLog, Destination, EmailRecord, Job
 from mail_sort_database.models import MailboxAccount
 from mail_sort_database.credentials import decrypt_credential
 from mail_sort_database.session import session_scope
@@ -138,6 +138,13 @@ class RouteJobStore(MailboxActionClaimer):
             job = session.get(Job, UUID(job_id), with_for_update=True)
             if job is None or job.type != "route_email":
                 raise LookupError(f"Route job {job_id} was not found")
+            session.add(AuditLog(
+                id=uuid4(),
+                job_id=job.id,
+                action="move_failed",
+                details={"destination_id": job.payload.get("destination_id"), "attempt": job.attempts},
+                error=str(error)[:4000],
+            ))
             job.last_error = str(error)[:4000]
             job.locked_at = None
             job.locked_by = None
@@ -175,14 +182,25 @@ class RouteJobStore(MailboxActionClaimer):
         )
 
     def _terminal(self, job_id: str, status: str) -> None:
-        statement = (
-            update(Job)
-            .where(Job.id == UUID(job_id), Job.type == "route_email", Job.status == "processing")
-            .values(status=status, locked_at=None, locked_by=None, completed_at=datetime.now(UTC))
-        )
         with session_scope(self._sessions) as session:
-            if not session.execute(statement).rowcount:
+            job = session.scalar(
+                select(Job)
+                .where(Job.id == UUID(job_id), Job.type == "route_email", Job.status == "processing")
+                .with_for_update()
+            )
+            if job is None:
                 raise LookupError(f"Processing route job {job_id} was not found")
+            now = datetime.now(UTC)
+            job.status = status
+            job.locked_at = None
+            job.locked_by = None
+            job.completed_at = now
+            session.add(AuditLog(
+                id=uuid4(),
+                job_id=job.id,
+                action="move_completed",
+                details={"destination_id": job.payload.get("destination_id")},
+            ))
 
 
 class DestinationRepository(DestinationMailboxLookup):
