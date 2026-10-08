@@ -26,6 +26,7 @@ export interface DashboardSummary {
 
 export interface JobDetail extends JobSummary {
   payload: Record<string, unknown>
+  jobs: JobSummary[]
   email: {
     subject: string
     sender: string

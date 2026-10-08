@@ -1,8 +1,9 @@
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import String, cast, or_, select
+from sqlalchemy import String, cast, or_, select, text
 from sqlalchemy.orm import Session
 
 from mail_sort_database.models import AuditLog, EmailRecord, Job
@@ -24,7 +25,7 @@ def list_jobs(
 ) -> dict[str, Any]:
     statement = select(Job, EmailRecord).outerjoin(
         EmailRecord, Job.email_record_id == EmailRecord.id
-    )
+    ).where(Job.type == "classify_email")
     if status:
         statement = statement.where(Job.status == status)
     if q.strip():
@@ -55,6 +56,13 @@ def get_job(job_id: UUID, session: Session = Depends(get_session)) -> dict[str, 
     ).all()
     details = job_summary(job, email)
     details["payload"] = job.payload
+    related_jobs = session.execute(
+        select(Job, EmailRecord)
+        .outerjoin(EmailRecord, Job.email_record_id == EmailRecord.id)
+        .where(Job.email_record_id == job.email_record_id)
+        .order_by(Job.created_at.desc())
+    ).all() if job.email_record_id is not None else [(job, email)]
+    details["jobs"] = [job_summary(related_job, related_email) for related_job, related_email in related_jobs]
     details["email"] = None if email is None else {
         "subject": email.subject,
         "sender": email.headers.get("from", email.headers.get("sender", "")),
@@ -70,3 +78,55 @@ def get_job(job_id: UUID, session: Session = Depends(get_session)) -> dict[str, 
         "created_at": item.created_at,
     } for item in audit]
     return details
+
+
+@router.post("/jobs/{job_id}/reclassify", status_code=202)
+def reclassify_email(job_id: UUID, session: Session = Depends(get_session)) -> dict[str, str]:
+    source = session.get(Job, job_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if source.email_record_id is None:
+        raise HTTPException(status_code=409, detail="Email snapshot is no longer available")
+
+    # Serialize manual requests for the same email and prevent duplicate active work.
+    email = session.scalar(
+        select(EmailRecord)
+        .where(EmailRecord.id == source.email_record_id)
+        .with_for_update()
+    )
+    if email is None:
+        raise HTTPException(status_code=409, detail="Email snapshot is no longer available")
+    active_job = session.scalar(
+        select(Job.id)
+        .where(
+            Job.email_record_id == email.id,
+            Job.type == "classify_email",
+            Job.status.in_(("pending", "processing")),
+        )
+        .limit(1)
+        .with_for_update()
+    )
+    if active_job is not None:
+        raise HTTPException(status_code=409, detail="Email already has a classification job in progress")
+    classification_job = session.scalar(
+        select(Job)
+        .where(
+            Job.email_record_id == email.id,
+            Job.type == "classify_email",
+        )
+        .order_by(Job.created_at.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if classification_job is None:
+        raise HTTPException(status_code=409, detail="Classification job is not available")
+    if classification_job.status in ("pending", "processing"):
+        raise HTTPException(status_code=409, detail="Email already has a classification job in progress")
+    classification_job.status = "pending"
+    classification_job.attempts = 0
+    classification_job.retry_at = datetime.now(UTC)
+    classification_job.completed_at = None
+    classification_job.last_error = None
+    session.execute(text("SELECT pg_notify('mail_jobs', 'new')"))
+    session.commit()
+    return {"job_id": str(classification_job.id), "status": "pending"}

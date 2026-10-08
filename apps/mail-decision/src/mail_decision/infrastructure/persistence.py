@@ -139,7 +139,7 @@ class JobStore(ClassificationResultStore, JobClaimer, ProcessingFailureHandler):
                     provider=cast(MailProvider, classification_job.provider),
                     provider_message_id=classification_job.provider_message_id,
                     email_record_id=str(classification_job.email_record_id),
-                    idempotency_key=f"{classification_job.id}:route",
+                    idempotency_key=f"{classification_job.id}:route:{job.attempt}",
                     action="move",
                     destination_id=outcome.destination_id,
                     classification_job_id=str(classification_job.id),

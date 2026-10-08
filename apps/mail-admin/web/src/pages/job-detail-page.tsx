@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
-import { ArrowLeft, Clock3, FileText, Fingerprint, Inbox, UserRound } from 'lucide-react'
+import { ArrowLeft, Clock3, FileText, Fingerprint, Inbox, RotateCcw, UserRound } from 'lucide-react'
 import { api } from '../api/client'
 import { ErrorState, LoadingState } from '../ui/feedback'
 import { PageHeading } from '../ui/page-heading'
@@ -10,11 +10,22 @@ const dateTime = (value: string | null | undefined) => value ? new Intl.DateTime
 
 export function JobDetailPage() {
   const { jobId } = useParams({ strict: false }) as { jobId: string }
+  const queryClient = useQueryClient()
   const query = useQuery({ queryKey: ['job', jobId], queryFn: () => api.job(jobId), enabled: Boolean(jobId) })
+  const reclassify = useMutation({
+    mutationFn: () => api.reclassify(jobId),
+    onSuccess: async result => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['job', result.job_id] }),
+        queryClient.invalidateQueries({ queryKey: ['jobs'] }),
+      ])
+    },
+  })
   return <>
     <Link to="/mail" className="mb-5 inline-flex items-center gap-2 text-xs font-semibold text-slate-500 transition hover:text-brand"><ArrowLeft className="size-4" />К списку писем</Link>
     {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={`Не удалось открыть письмо: ${query.error.message}`} /> : <>
-      <PageHeading title={query.data.subject || '(без темы)'} description={`${query.data.sender || 'Отправитель неизвестен'} · ${dateTime(query.data.received_at || query.data.created_at)}`} action={<StatusBadge status={query.data.status} />} />
+      <PageHeading title={query.data.subject || '(без темы)'} description={`${query.data.sender || 'Отправитель неизвестен'} · ${dateTime(query.data.received_at || query.data.created_at)}`} action={<div className="flex items-center gap-3"><StatusBadge status={query.data.status} /><button onClick={() => reclassify.mutate()} disabled={!query.data.email || reclassify.isPending} className="focus-ring inline-flex h-9 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="size-3.5" />{reclassify.isPending ? 'Отправляем…' : 'Проверить снова'}</button></div>} />
+      {reclassify.isError && <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs text-rose-700">Не удалось отправить письмо на повторную проверку: {reclassify.error.message}</div>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,.8fr)]">
         <div className="space-y-5">
           <section className="surface overflow-hidden">
@@ -34,6 +45,13 @@ export function JobDetailPage() {
               <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"><span className="text-xs font-bold">{index + 1}</span></span>
               <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold">{entry.action}</span><span className="text-[11px] text-slate-400">{dateTime(entry.created_at)}</span></div>{entry.error && <p className="mt-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{entry.error}</p>}{Object.keys(entry.details).length > 0 && <pre className="mt-2 overflow-auto rounded-lg bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">{JSON.stringify(entry.details, null, 2)}</pre>}</div>
             </div>)}</div> : <div className="p-8 text-center text-sm text-muted">Записей аудита пока нет.</div>}
+          </section>
+          <section className="surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-line px-5 py-4"><h2 className="text-sm font-bold">Все задания письма</h2><span className="text-xs text-muted">{query.data.jobs.length}</span></div>
+            <div className="divide-y divide-line">{query.data.jobs.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+              <div className="min-w-0"><div className="text-xs font-semibold text-slate-700">{item.type === 'classify_email' ? 'Классификация' : item.type === 'route_email' ? 'Перенос в папку' : item.type}</div><div className="mt-1 break-all font-mono text-[10px] text-slate-400">{item.id}</div></div>
+              <div className="flex items-center gap-3"><span className="text-[11px] text-slate-400">{dateTime(item.created_at)}</span><StatusBadge status={item.status} /></div>
+            </div>)}</div>
           </section>
         </div>
         <aside className="space-y-5">

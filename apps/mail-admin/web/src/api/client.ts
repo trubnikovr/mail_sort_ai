@@ -29,6 +29,7 @@ export const api = {
     return request<Page<JobSummary>>(`/api/jobs?${params}`)
   },
   job: (id: string) => request<JobDetail>(`/api/jobs/${id}`),
+  reclassify: (id: string) => request<{ job_id: string; status: string }>(`/api/jobs/${id}/reclassify`, { method: 'POST' }),
   logs: (q: string, offset = 0) => {
     const params = new URLSearchParams({ q, limit: '50', offset: String(offset) })
     return request<LogPage>(`/api/logs?${params}`)
