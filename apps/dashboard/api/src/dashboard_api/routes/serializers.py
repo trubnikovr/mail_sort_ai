@@ -3,7 +3,11 @@ from typing import Any
 from mail_sort_database.models import EmailRecord, Job
 
 
-def job_summary(job: Job, email: EmailRecord | None) -> dict[str, Any]:
+def job_summary(
+    job: Job,
+    email: EmailRecord | None,
+    destination_id: str | None = None,
+) -> dict[str, Any]:
     headers = email.headers if email is not None else {}
     return {
         "id": str(job.id),
@@ -18,6 +22,6 @@ def job_summary(job: Job, email: EmailRecord | None) -> dict[str, Any]:
         "completed_at": job.completed_at,
         "attempts": job.attempts,
         "max_attempts": job.max_attempts,
-        "destination_id": job.payload.get("destination_id"),
+        "destination_id": destination_id or job.payload.get("destination_id"),
         "last_error": job.last_error,
     }

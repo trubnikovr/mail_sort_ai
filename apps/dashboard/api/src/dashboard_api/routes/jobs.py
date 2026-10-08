@@ -38,7 +38,23 @@ def list_jobs(
     jobs = session.execute(
         statement.order_by(Job.created_at.desc()).limit(limit).offset(offset)
     ).all()
-    return {"items": [job_summary(job, email) for job, email in jobs], "limit": limit, "offset": offset}
+    job_ids = [job.id for job, _ in jobs]
+    destination_by_job: dict[UUID, str] = {}
+    if job_ids:
+        audit_rows = session.execute(
+            select(AuditLog.job_id, AuditLog.details)
+            .where(AuditLog.job_id.in_(job_ids))
+            .order_by(AuditLog.created_at.desc())
+        ).all()
+        for audit_job_id, details in audit_rows:
+            destination = details.get("destination_id")
+            if audit_job_id not in destination_by_job and isinstance(destination, str):
+                destination_by_job[audit_job_id] = destination
+    return {
+        "items": [job_summary(job, email, destination_by_job.get(job.id)) for job, email in jobs],
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/jobs/{job_id}")
@@ -55,6 +71,15 @@ def get_job(job_id: UUID, session: Session = Depends(get_session)) -> dict[str, 
         select(AuditLog).where(AuditLog.job_id == job.id).order_by(AuditLog.created_at)
     ).all()
     details = job_summary(job, email)
+    if not details["destination_id"]:
+        details["destination_id"] = next(
+            (
+                item.details.get("destination_id")
+                for item in reversed(audit)
+                if isinstance(item.details.get("destination_id"), str)
+            ),
+            None,
+        )
     details["payload"] = job.payload
     related_jobs = session.execute(
         select(Job, EmailRecord)
